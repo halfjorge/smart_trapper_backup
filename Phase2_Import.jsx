@@ -452,24 +452,50 @@ app.bringToFront();
     return trySampleRGBAt(doc, samplePoint.x, samplePoint.y);
   }
 
-  function getInkRGBForSourceBase(sourceBaseLayer, samplePoint, doc) {
-    // 1) Prefer solid fill extraction
+  function getInkRGBForSourceBase(sourceBaseLayer, sourceName, doc) {
+    // 1) If it's a SOLIDFILL layer, pull its RGB (best + exact)
     try {
-      if (sourceBaseLayer && sourceBaseLayer.typename === "ArtLayer" &&
+      if (sourceBaseLayer &&
+          sourceBaseLayer.typename === "ArtLayer" &&
           sourceBaseLayer.kind === LayerKind.SOLIDFILL) {
         var solidRgb = getSolidFillRGBFromLayer(sourceBaseLayer);
         if (solidRgb) return { rgb: solidRgb, method: "solidfill" };
       }
     } catch (e) {}
 
-    // 2) Fall back to sampling if solid fill not available
+    // 2) Sample while source base layer is active (DOM colorSampler, no actions)
     try {
-      var sampled = sampleInkAtPoint(doc, samplePoint);
-      if (sampled) return { rgb: sampled, method: "sample" };
-    } catch (e2) {}
+      if (doc && sourceBaseLayer) {
+        var snap = soloLayerTopLevel(doc, sourceBaseLayer);
+        var oldActive = doc.activeLayer;
+        doc.activeLayer = sourceBaseLayer;
+        revealLayerChain(sourceBaseLayer);
+        var pt = centerPointFromLayerBounds(sourceBaseLayer);
+        var s = doc.colorSamplers.add([pt[0], pt[1]]);
+        var c = s.color;
+        var sampledRgb = { r: c.rgb.red, g: c.rgb.green, b: c.rgb.blue };
+        try { s.remove(); } catch(_){}
+        restoreTopLevelVisibility(doc, snap);
+        try { doc.activeLayer = oldActive; } catch(_){}
+        return { rgb: sampledRgb, method: "sampler" };
+      }
+    } catch (eSampler) {
+      log("TRAP_COLOR_FALLBACK reason=sampler_fail source=" + sourceName + " err=" + eSampler + (eSampler.line ? (" line=" + eSampler.line) : ""));
+    }
 
-    // 3) Final fallback ONLY if everything fails
-    return { rgb: { r: 0, g: 0, b: 0 }, method: "fallback_black" };
+    // 3) Deterministic palette-by-name
+    var fb = getFallbackColorByName(sourceName);
+    if (fb) {
+      log("TRAP_COLOR_FALLBACK reason=name_palette source=" + sourceName);
+      return {
+        rgb: { r: fb.rgb.red, g: fb.rgb.green, b: fb.rgb.blue },
+        method: "fallback"
+      };
+    }
+
+    // 4) Absolute last resort (visible)
+    log("TRAP_COLOR_FALLBACK reason=forced_magenta source=" + sourceName);
+    return { rgb: { r: 255, g: 0, b: 255 }, method: "fallback" };
   }
 
   // ---- Grouping helpers
@@ -780,8 +806,6 @@ if(!folder) return;
       }
     }
 
-    // Cache sampled colors per SOURCE
-    var inkCache = {};
     var imported = 0;
 
     log("Removing old TRAP__ layers...");
@@ -821,15 +845,6 @@ if(!folder) return;
           continue;
         }
 
-        // Sample ink once per source
-        step = "sample_ink";
-        log("  STEP: " + step);
-        if(!inkCache[spec.source]){
-          inkCache[spec.source] = sampleLayerInkColor(hostDoc, sourceBase);
-        } else {
-          app.foregroundColor = inkCache[spec.source];
-        }
-
         step = "verify_png_exists";
         log("  STEP: " + step);
         if(!pngFile.exists){
@@ -863,22 +878,23 @@ if(!folder) return;
 
         step = "fill_trap_selection";
         log("  STEP: " + step);
-        var samplePoint = null;
-        try {
-          var _pt = centerPointFromLayerBounds(sourceBase);
-          samplePoint = { x: _pt[0], y: _pt[1] };
-        } catch (_ePt) {}
-
-        var ink = getInkRGBForSourceBase(sourceBase, samplePoint, hostDoc);
+        var ink = getInkRGBForSourceBase(sourceBase, spec.source, hostDoc);
         var trapColor = makeSolidColorRGB(ink.rgb.r, ink.rgb.g, ink.rgb.b);
 
         log("TRAP_COLOR source=" + spec.source +
             " rgb=(" + ink.rgb.r + "," + ink.rgb.g + "," + ink.rgb.b + ")" +
             " method=" + ink.method);
 
+        var prevFg = null;
+        try {
+          prevFg = makeSolidColorRGB(app.foregroundColor.rgb.red, app.foregroundColor.rgb.green, app.foregroundColor.rgb.blue);
+        } catch(_ePrev) {}
         app.foregroundColor = trapColor;
         hostDoc.activeLayer = trapLayer;
         hostDoc.selection.fill(trapColor, ColorBlendMode.NORMAL, 100, false);
+        if (prevFg) {
+          try { app.foregroundColor = prevFg; } catch(_eRestore) {}
+        }
         hostDoc.selection.deselect();
 
         step = "done";
