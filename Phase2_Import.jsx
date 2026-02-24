@@ -146,6 +146,25 @@ app.bringToFront();
     return snap;
   }
 
+  function revealLayerChain(layer){
+    var p = layer;
+    while(p && p.parent && p.parent.typename !== "Document"){
+      try { p.visible = true; } catch(e){}
+      p = p.parent;
+    }
+    try { layer.visible = true; } catch(e){}
+  }
+
+  function centerPointFromLayerBounds(layer){
+    var b = layer.bounds;
+    var L = b[0].as("px");
+    var T = b[1].as("px");
+    var R = b[2].as("px");
+    var B = b[3].as("px");
+    if(!(R > L) || !(B > T)) throw new Error("Invalid layer bounds: " + layer.name);
+    return [Math.floor((L + R) / 2), Math.floor((T + B) / 2)];
+  }
+
   // ---- Find sample point by scanning inside selection bounds
   function findSamplePointByScan(doc, scanStep){
     if(!hasSelection(doc)) return null;
@@ -186,28 +205,13 @@ app.bringToFront();
     var snap = soloLayerTopLevel(doc, layer);
     var oldActive = doc.activeLayer;
     doc.activeLayer = layer;
+    revealLayerChain(layer);
 
-    if(!selectLayerShapeBestEffort(doc, "SAMPLE=" + layer.name)){
-      restoreTopLevelVisibility(doc, snap);
-      try { doc.activeLayer = oldActive; } catch(e){}
-      throw new Error("Could not create selection for sampling: " + layer.name);
-    }
-
-    var pt = findSamplePointByScan(doc, 25);
-    if(!pt) pt = findSamplePointByScan(doc, 10);
-    if(!pt) pt = findSamplePointByScan(doc, 4);
-    if(!pt){
-      doc.selection.deselect();
-      restoreTopLevelVisibility(doc, snap);
-      try { doc.activeLayer = oldActive; } catch(e){}
-      throw new Error("Could not find sample point: " + layer.name);
-    }
-
+    var pt = centerPointFromLayerBounds(layer);
     var sampler = doc.colorSamplers.add([pt[0], pt[1]]);
     var c = sampler.color;
     sampler.remove();
 
-    doc.selection.deselect();
     restoreTopLevelVisibility(doc, snap);
     try { doc.activeLayer = oldActive; } catch(e){}
 

@@ -139,6 +139,15 @@ fn main()->Result<()>{
         plates.push(alpha_to_bit(w,h,&rgba));
     }
 
+    let key_file=job.files.iter()
+        .find(|f|f.kind=="KEY")
+        .or_else(||job.files.iter().find(|f|f.name==job.keyLayerName))
+        .context("missing KEY mask file entry")?;
+    let (kmw,kmh,key_rgba)=read_mask_rgba(&job_folder.join(&key_file.png))?;
+    if kmw!=w||kmh!=h{ anyhow::bail!("KEY mask size mismatch"); }
+    plate_names.push(job.keyLayerName.clone());
+    plates.push(alpha_to_bit(w,h,&key_rgba));
+
     // Detect touching boundaries
     let mut pair_boundary:HashMap<(usize,usize),Vec<u8>>=HashMap::new();
     let neigh=dirs8();
