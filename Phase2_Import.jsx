@@ -285,7 +285,7 @@ app.bringToFront();
   }
 
   // ---- Sample SOURCE ink color (once per source)
-  // Returns a SolidColor sampled from center using DOM colorSamplers; never throws.
+  // Returns a SolidColor sampled from center using DOM colorSamplers; on failure returns null.
   function sampleLayerInkColor(doc, layer){
     var step = "init";
     var sampler = null;
@@ -334,13 +334,7 @@ app.bringToFront();
       try { if (sampler) sampler.remove(); } catch (_) {}
       try { if (snap) restoreTopLevelVisibility(doc, snap); } catch (_) {}
       try { if (oldActive) doc.activeLayer = oldActive; } catch (_) {}
-
-      var fallback = new SolidColor();
-      fallback.rgb.red = 0;
-      fallback.rgb.green = 0;
-      fallback.rgb.blue = 0;
-      app.foregroundColor = fallback;
-      return fallback;
+      return null;
     }
   }
 
@@ -358,6 +352,31 @@ app.bringToFront();
   function setForegroundRGB(rgb) {
     var c = makeSolidColorRGB(rgb.r, rgb.g, rgb.b);
     app.foregroundColor = c;
+  }
+
+  function getSolidFillRGBFromLayer(layer) {
+    // Works for ArtLayer with kind == LayerKind.SOLIDFILL
+    try {
+      var ref = new ActionReference();
+      ref.putIdentifier(charIDToTypeID("Lyr "), layer.id);
+      var desc = executeActionGet(ref);
+
+      // adjustment[0].color.{red, green, blue}
+      var adjList = desc.getList(stringIDToTypeID("adjustment"));
+      if (!adjList || adjList.count === 0) return null;
+
+      var adj0 = adjList.getObjectValue(0);
+      var colorDesc = adj0.getObjectValue(stringIDToTypeID("color"));
+      if (!colorDesc) return null;
+
+      return {
+        r: colorDesc.getDouble(stringIDToTypeID("red")),
+        g: colorDesc.getDouble(stringIDToTypeID("green")),
+        b: colorDesc.getDouble(stringIDToTypeID("blue"))
+      };
+    } catch (e) {
+      return null;
+    }
   }
 
   function getSolidFillLayerColor(layer){
@@ -426,6 +445,31 @@ app.bringToFront();
     var rgb = FALLBACK_RGB_BY_NAME[name];
     if (!rgb) return null;
     return makeSolidColorRGB(rgb[0], rgb[1], rgb[2]);
+  }
+
+  function sampleInkAtPoint(doc, samplePoint) {
+    if (!samplePoint || samplePoint.x == null || samplePoint.y == null) return null;
+    return trySampleRGBAt(doc, samplePoint.x, samplePoint.y);
+  }
+
+  function getInkRGBForSourceBase(sourceBaseLayer, samplePoint, doc) {
+    // 1) Prefer solid fill extraction
+    try {
+      if (sourceBaseLayer && sourceBaseLayer.typename === "ArtLayer" &&
+          sourceBaseLayer.kind === LayerKind.SOLIDFILL) {
+        var solidRgb = getSolidFillRGBFromLayer(sourceBaseLayer);
+        if (solidRgb) return { rgb: solidRgb, method: "solidfill" };
+      }
+    } catch (e) {}
+
+    // 2) Fall back to sampling if solid fill not available
+    try {
+      var sampled = sampleInkAtPoint(doc, samplePoint);
+      if (sampled) return { rgb: sampled, method: "sample" };
+    } catch (e2) {}
+
+    // 3) Final fallback ONLY if everything fails
+    return { rgb: { r: 0, g: 0, b: 0 }, method: "fallback_black" };
   }
 
   // ---- Grouping helpers
@@ -819,42 +863,18 @@ if(!folder) return;
 
         step = "fill_trap_selection";
         log("  STEP: " + step);
-        var trapColor = null;
-        var colorMethod = "none";
+        var samplePoint = null;
+        try {
+          var _pt = centerPointFromLayerBounds(sourceBase);
+          samplePoint = { x: _pt[0], y: _pt[1] };
+        } catch (_ePt) {}
 
-        // prefer SOLIDFILL read from source base layer
-        trapColor = getSolidFillLayerColor(sourceBase);
-        if (trapColor) colorMethod = "solidfill";
-
-        // fallback to sampling, but never fail trap if this errors
-        if (!trapColor){
-          try{
-            var sampled = inkCache[spec.source];
-            if (!sampled) sampled = sampleLayerInkColor(hostDoc, sourceBase);
-            if (sampled){
-              trapColor = makeSolidColorRGB(sampled.rgb.red, sampled.rgb.green, sampled.rgb.blue);
-              colorMethod = "sample";
-            }
-          }catch(eSample){
-            log("TRAP_COLOR sample_err source=" + spec.source + " err=" + eSample + (eSample.line ? (" line=" + eSample.line) : ""));
-          }
-        }
-
-        // deterministic name fallback
-        if (!trapColor){
-          trapColor = getFallbackColorByName(spec.source);
-          if (trapColor) colorMethod = "fallback";
-        }
-
-        // final fallback: visible warning color
-        if (!trapColor){
-          trapColor = makeSolidColorRGB(255, 0, 255);
-          colorMethod = "forced-magenta";
-        }
+        var ink = getInkRGBForSourceBase(sourceBase, samplePoint, hostDoc);
+        var trapColor = makeSolidColorRGB(ink.rgb.r, ink.rgb.g, ink.rgb.b);
 
         log("TRAP_COLOR source=" + spec.source +
-            " rgb=(" + trapColor.rgb.red + "," + trapColor.rgb.green + "," + trapColor.rgb.blue + ")" +
-            " method=" + colorMethod);
+            " rgb=(" + ink.rgb.r + "," + ink.rgb.g + "," + ink.rgb.b + ")" +
+            " method=" + ink.method);
 
         app.foregroundColor = trapColor;
         hostDoc.activeLayer = trapLayer;
