@@ -277,53 +277,91 @@ app.bringToFront();
   // Translate pasted by (src - dst) -> select alpha -> delete temp
   // ======================
   function selectionFromTrapPngIntoHost_ALIGN_BY_BOUNDS(hostDoc, pngFile){
-    var d = app.open(pngFile);
-    d.activeLayer = d.layers[0];
-    d.selection.deselect();
-
-    try { selectTransparencyOfActiveLayer(); } catch(e0){}
-    if(!hasSelection(d)){
-      try { d.close(SaveOptions.DONOTSAVECHANGES); } catch(e1){}
+    log("OPEN_TRAP_PNG: " + (pngFile ? pngFile.fsName : "<null>") + " exists=" + (pngFile ? pngFile.exists : false));
+    if(!pngFile || !pngFile.exists){
+      log("MISSING trap png: " + (pngFile ? pngFile.fsName : "<null>"));
       return false;
     }
 
-    var sb = d.selection.bounds;
-    var srcL = sb[0].as("px");
-    var srcT = sb[1].as("px");
+    var d = null;
+    var pasted = null;
 
-    d.selection.selectAll();
-    d.selection.copy();
-    d.close(SaveOptions.DONOTSAVECHANGES);
+    try {
+      log("STEP: app.open()");
+      d = app.open(pngFile);
+      log("STEP: opened ok, trapDoc=" + d.name);
+      d.activeLayer = d.layers[0];
+      log("STEP: trapDoc.selection.deselect()");
+      d.selection.deselect();
 
-    app.activeDocument = hostDoc;
-    hostDoc.paste();
-    var pasted = hostDoc.activeLayer;
+      log("STEP: trapDoc select transparency");
+      try { selectTransparencyOfActiveLayer(); } catch(e0){ log("STEP_WARN: trapDoc transparency err: " + e0); }
+      if(!hasSelection(d)){
+        log("STEP_FAIL: no selection in trapDoc after transparency");
+        try { d.close(SaveOptions.DONOTSAVECHANGES); } catch(e1){}
+        d = null;
+        return false;
+      }
 
-    hostDoc.selection.deselect();
-    hostDoc.activeLayer = pasted;
+      log("STEP: trapDoc.selection.bounds");
+      var sb = d.selection.bounds;
+      var srcL = sb[0].as("px");
+      var srcT = sb[1].as("px");
 
-    try { selectTransparencyOfActiveLayer(); } catch(e2){}
-    if(!hasSelection(hostDoc)){
-      try { pasted.remove(); } catch(e3){}
+      log("STEP: trapDoc.selection.selectAll()");
+      d.selection.selectAll();
+      log("STEP: trapDoc.selection.copy()");
+      d.selection.copy();
+      log("STEP: close trapDoc");
+      d.close(SaveOptions.DONOTSAVECHANGES);
+      d = null;
+
+      log("STEP: activate hostDoc");
+      app.activeDocument = hostDoc;
+      log("STEP: hostDoc.paste()");
+      hostDoc.paste();
+      pasted = hostDoc.activeLayer;
+
+      log("STEP: hostDoc.selection.deselect()");
+      hostDoc.selection.deselect();
+      hostDoc.activeLayer = pasted;
+
+      log("STEP: hostDoc select transparency of pasted");
+      try { selectTransparencyOfActiveLayer(); } catch(e2){ log("STEP_WARN: hostDoc transparency err: " + e2); }
+      if(!hasSelection(hostDoc)){
+        log("STEP_FAIL: no selection in hostDoc after paste transparency");
+        try { pasted.remove(); } catch(e3){}
+        pasted = null;
+        return false;
+      }
+
+      log("STEP: hostDoc.selection.bounds");
+      var hb = hostDoc.selection.bounds;
+      var dstL = hb[0].as("px");
+      var dstT = hb[1].as("px");
+
+      var dx = srcL - dstL;
+      var dy = srcT - dstT;
+      log("STEP: pasted.translate(" + dx + "," + dy + ")");
+      try { pasted.translate(dx, dy); } catch(eMove){ log("STEP_WARN: pasted.translate err: " + eMove); }
+
+      log("STEP: hostDoc reselect pasted transparency");
+      hostDoc.selection.deselect();
+      hostDoc.activeLayer = pasted;
+      try { selectTransparencyOfActiveLayer(); } catch(e4){ log("STEP_WARN: reselect transparency err: " + e4); }
+      var ok = hasSelection(hostDoc);
+      log("STEP: final selection ok=" + ok);
+
+      log("STEP: remove pasted temp layer");
+      try { pasted.remove(); } catch(e5){}
+      return ok;
+    } catch(e) {
+      log("TRAP_PNG_FAIL: " + (pngFile ? pngFile.fsName : "<null>") + " :: " + e);
+      try { if(d) d.close(SaveOptions.DONOTSAVECHANGES); } catch(_e1){}
+      try { if(pasted) pasted.remove(); } catch(_e2){}
+      try { app.activeDocument = hostDoc; } catch(_e3){}
       return false;
     }
-
-    var hb = hostDoc.selection.bounds;
-    var dstL = hb[0].as("px");
-    var dstT = hb[1].as("px");
-
-    var dx = srcL - dstL;
-    var dy = srcT - dstT;
-
-    try { pasted.translate(dx, dy); } catch(eMove){}
-
-    hostDoc.selection.deselect();
-    hostDoc.activeLayer = pasted;
-    try { selectTransparencyOfActiveLayer(); } catch(e4){}
-    var ok = hasSelection(hostDoc);
-
-    try { pasted.remove(); } catch(e5){}
-    return ok;
   }
 
   // =======================================================
@@ -501,51 +539,61 @@ if(!folder) return;
       var spec = trapsObj.traps[t]; // {source, target, png}
       log("--- Trap #" + (t+1) + " " + spec.source + " over " + spec.target);
 
-      var sourceGroup = findColorGroup(hostDoc, spec.source);
-      if(!sourceGroup){
-        log("  SKIP: missing COLOR__ group for source: " + spec.source);
-        continue;
-      }
-
-      var sourceBase = findArtLayerByName(sourceGroup, spec.source);
-      if(!sourceBase){
-        log("  SKIP: no base ArtLayer named '" + spec.source + "' inside " + sourceGroup.name);
-        continue;
-      }
-
-      // Sample ink once per source
-      if(!inkCache[spec.source]){
-        inkCache[spec.source] = sampleLayerInkColor(hostDoc, sourceBase);
-      } else {
-        app.foregroundColor = inkCache[spec.source];
-      }
-
       var pngFile = new File(folder.fsName + "/" + spec.png);
-      if(!pngFile.exists){
-        log("  SKIP: missing PNG: " + pngFile.fsName);
-        continue;
-      }
+      log("  TRAP PNG path: " + pngFile.fsName + " exists=" + pngFile.exists);
 
-      hostDoc.selection.deselect();
+      try {
+        var sourceGroup = findColorGroup(hostDoc, spec.source);
+        if(!sourceGroup){
+          log("  SKIP: missing COLOR__ group for source: " + spec.source);
+          continue;
+        }
 
-      // Build selection aligned to correct pixel coords
-      if(!selectionFromTrapPngIntoHost_ALIGN_BY_BOUNDS(hostDoc, pngFile)){
-        log("  SKIP: could not load selection from trap PNG");
+        var sourceBase = findArtLayerByName(sourceGroup, spec.source);
+        if(!sourceBase){
+          log("  SKIP: no base ArtLayer named '" + spec.source + "' inside " + sourceGroup.name);
+          continue;
+        }
+
+        // Sample ink once per source
+        if(!inkCache[spec.source]){
+          inkCache[spec.source] = sampleLayerInkColor(hostDoc, sourceBase);
+        } else {
+          app.foregroundColor = inkCache[spec.source];
+        }
+
+        if(!pngFile.exists){
+          log("  SKIP: missing PNG: " + pngFile.fsName);
+          continue;
+        }
+
         hostDoc.selection.deselect();
+
+        // Build selection aligned to correct pixel coords
+        var okSel = selectionFromTrapPngIntoHost_ALIGN_BY_BOUNDS(hostDoc, pngFile);
+        if(!okSel){
+          log("  SKIP trap due to failure: " + spec.png);
+          hostDoc.selection.deselect();
+          skippedSel++;
+          continue;
+        }
+
+        var trapName = "TRAP__" + sanitizeName(spec.source) + "_over_" + sanitizeName(spec.target);
+        var trapLayer = createTrapLayerInSourceGroup(hostDoc, sourceGroup, sourceBase, trapName);
+        applySourceAppearanceToTrap(trapLayer, sourceBase);
+
+        hostDoc.activeLayer = trapLayer;
+        hostDoc.selection.fill(app.foregroundColor, ColorBlendMode.NORMAL, 100, false);
+        hostDoc.selection.deselect();
+
+        imported++;
+        log("  Imported: " + trapName + " (in " + sourceGroup.name + ")");
+      } catch(eTrap){
+        log("  SKIP trap exception: " + spec.png + " :: " + eTrap);
+        try { hostDoc.selection.deselect(); } catch(_e){}
         skippedSel++;
         continue;
       }
-
-      var trapName = "TRAP__" + sanitizeName(spec.source) + "_over_" + sanitizeName(spec.target);
-      var trapLayer = createTrapLayerInSourceGroup(hostDoc, sourceGroup, sourceBase, trapName);
-      applySourceAppearanceToTrap(trapLayer, sourceBase);
-
-      hostDoc.activeLayer = trapLayer;
-      hostDoc.selection.fill(app.foregroundColor, ColorBlendMode.NORMAL, 100, false);
-      hostDoc.selection.deselect();
-
-      imported++;
-      log("  ✓ Imported: " + trapName + " (in " + sourceGroup.name + ")");
     }
 
     log("=== SUMMARY ===");
