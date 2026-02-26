@@ -63,6 +63,155 @@ app.bringToFront();
   var ALPHA_THRESHOLD = 128; // 0-255
   var EDGE_BIAS_PX = 0; // +expand / -contract
 
+  if (typeof JSON === "undefined") JSON = {};
+  if (!JSON.parse){
+    JSON.parse = function (text){
+      var s = String(text);
+      var i = 0;
+      var len = s.length;
+
+      function error(msg){
+        throw new Error(msg + " at " + i);
+      }
+      function ch(){
+        return s.charAt(i);
+      }
+      function isWs(c){
+        return c === " " || c === "\t" || c === "\n" || c === "\r";
+      }
+      function skipWs(){
+        while(i < len && isWs(ch())) i++;
+      }
+      function expect(c){
+        if(ch() !== c) error("Expected '" + c + "'");
+        i++;
+      }
+      function parseString(){
+        var out = "";
+        expect("\"");
+        while(i < len){
+          var c = ch();
+          i++;
+          if(c === "\"") return out;
+          if(c === "\\"){
+            if(i >= len) error("Unterminated escape");
+            var e = ch();
+            i++;
+            if(e === "\"" || e === "\\" || e === "/"){ out += e; continue; }
+            if(e === "b"){ out += "\b"; continue; }
+            if(e === "f"){ out += "\f"; continue; }
+            if(e === "n"){ out += "\n"; continue; }
+            if(e === "r"){ out += "\r"; continue; }
+            if(e === "t"){ out += "\t"; continue; }
+            if(e === "u"){
+              var hex = s.substr(i, 4);
+              if(!/^[0-9a-fA-F]{4}$/.test(hex)) error("Invalid unicode escape");
+              out += String.fromCharCode(parseInt(hex, 16));
+              i += 4;
+              continue;
+            }
+            error("Invalid escape");
+          } else {
+            if(c < " ") error("Invalid control character");
+            out += c;
+          }
+        }
+        error("Unterminated string");
+      }
+      function parseNumber(){
+        var start = i;
+        if(ch() === "-") i++;
+        if(ch() === "0"){
+          i++;
+        } else {
+          if(ch() < "1" || ch() > "9") error("Invalid number");
+          while(ch() >= "0" && ch() <= "9") i++;
+        }
+        if(ch() === "."){
+          i++;
+          if(ch() < "0" || ch() > "9") error("Invalid number");
+          while(ch() >= "0" && ch() <= "9") i++;
+        }
+        if(ch() === "e" || ch() === "E"){
+          i++;
+          if(ch() === "+" || ch() === "-") i++;
+          if(ch() < "0" || ch() > "9") error("Invalid exponent");
+          while(ch() >= "0" && ch() <= "9") i++;
+        }
+        var n = Number(s.slice(start, i));
+        if(!isFinite(n)) error("Invalid number");
+        return n;
+      }
+      function parseLiteral(word, value){
+        if(s.substr(i, word.length) !== word) error("Unexpected token");
+        i += word.length;
+        return value;
+      }
+      function parseArray(){
+        var arr = [];
+        expect("[");
+        skipWs();
+        if(ch() === "]"){ i++; return arr; }
+        while(true){
+          arr.push(parseValue());
+          skipWs();
+          if(ch() === ","){
+            i++;
+            skipWs();
+            continue;
+          }
+          if(ch() === "]"){
+            i++;
+            return arr;
+          }
+          error("Expected ',' or ']'");
+        }
+      }
+      function parseObject(){
+        var obj = {};
+        expect("{");
+        skipWs();
+        if(ch() === "}"){ i++; return obj; }
+        while(true){
+          if(ch() !== "\"") error("Expected string key");
+          var key = parseString();
+          skipWs();
+          expect(":");
+          skipWs();
+          obj[key] = parseValue();
+          skipWs();
+          if(ch() === ","){
+            i++;
+            skipWs();
+            continue;
+          }
+          if(ch() === "}"){
+            i++;
+            return obj;
+          }
+          error("Expected ',' or '}'");
+        }
+      }
+      function parseValue(){
+        skipWs();
+        var c = ch();
+        if(c === "\"") return parseString();
+        if(c === "{") return parseObject();
+        if(c === "[") return parseArray();
+        if(c === "-" || (c >= "0" && c <= "9")) return parseNumber();
+        if(c === "t") return parseLiteral("true", true);
+        if(c === "f") return parseLiteral("false", false);
+        if(c === "n") return parseLiteral("null", null);
+        error("Unexpected token");
+      }
+
+      var result = parseValue();
+      skipWs();
+      if(i !== len) error("Trailing characters");
+      return result;
+    };
+  }
+
   function hasSelection(doc){
     try { doc.selection.bounds; return true; }
     catch(e){ return false; }
@@ -265,14 +414,10 @@ app.bringToFront();
   }
 
   function parseJSON(txt){
-    txt = String(txt);
-    if (!(typeof JSON !== "undefined" && JSON && JSON.parse)){
-      throw new Error("Could not parse JSON: JSON.parse not available");
-    }
     try {
-      return JSON.parse(txt);
+      return JSON.parse(String(txt));
     } catch(e1){
-      throw new Error("Could not parse JSON: " + e1.message);
+      throw new Error("Could not parse JSON: " + e1);
     }
   }
 
