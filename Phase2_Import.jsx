@@ -545,6 +545,16 @@ app.bringToFront();
     }
 
     var hostDoc = app.activeDocument;
+    var doClean = confirm("Does this file need plate cleanup before trapping?\n\nYes = clean fuzzy edges\nNo = skip cleanup");
+    if(doClean === null || typeof doClean === "undefined"){
+      return;
+    }
+    if(doClean){
+      log("Preflight cleanup: ENABLED");
+      cleanInkLayersNonDestructive(hostDoc);
+    } else {
+      log("Preflight cleanup: SKIPPED");
+    }
 
     // If controller provided folder, use it.
 // Otherwise fall back to manual selection.
@@ -571,10 +581,6 @@ if(!folder) return;
     if(hostDoc.layers.length < 3){
       alert("PSD needs at least 3 top-level layers (KEY top, PAPER bottom, colors in between).");
       return;
-    }
-
-    if(CLEAN_INPUT_BEFORE_TRAP){
-      cleanInkLayersNonDestructive(hostDoc);
     }
 
     var colorsBottomToTop = [];
