@@ -98,6 +98,20 @@ app.bringToFront();
     executeAction(cTID("Thrs"), d, DialogModes.NO);
   }
 
+  function selectChannelByName(doc, name){
+    app.activeDocument = doc;
+    var d = new ActionDescriptor();
+    var r = new ActionReference();
+    r.putName(cTID("Chnl"), name);
+    d.putReference(cTID("null"), r);
+    d.putBoolean(cTID("MkVs"), false);
+    executeAction(cTID("slct"), d, DialogModes.NO);
+  }
+
+  function restoreCompositeChannels(doc){
+    try { doc.activeChannels = doc.componentChannels; } catch(e){}
+  }
+
   function cleanInkLayersNonDestructive(hostDoc){
     log("CLEAN: begin preflight alpha-threshold cleanup");
 
@@ -116,14 +130,40 @@ app.bringToFront();
       var orig = targets[t];
       var cleanName = "CLEAN__" + orig.name;
       var sampled = null;
-      var tmp = findChannelByName(hostDoc, "__TMP_CLEAN_ALPHA__");
+      var tmp = null;
       var layerChannels = null;
       try { layerChannels = hostDoc.activeChannels; } catch(e0a){}
 
       try {
+        // Local sampling to avoid cleanup dependency on sampleLayerInkColor state changes.
+        try {
+          var snap = soloLayerTopLevel(hostDoc, orig);
+          var sampleOldActive = hostDoc.activeLayer;
+          try {
+            hostDoc.activeLayer = orig;
+            if(selectLayerShapeBestEffort(hostDoc, "CLEAN_SAMPLE=" + orig.name)){
+              var pt = findSamplePointByScan(hostDoc, 25);
+              if(!pt) pt = findSamplePointByScan(hostDoc, 10);
+              if(!pt) pt = findSamplePointByScan(hostDoc, 4);
+              if(pt){
+                var sampler = hostDoc.colorSamplers.add([pt[0], pt[1]]);
+                sampled = sampler.color;
+                sampler.remove();
+                log("  [CLEAN_SAMPLE] " + orig.name + " @ (" + pt[0] + "," + pt[1] + ")");
+              }
+            }
+          } finally {
+            hostDoc.selection.deselect();
+            restoreTopLevelVisibility(hostDoc, snap);
+            try { hostDoc.activeLayer = sampleOldActive; } catch(eSa){}
+          }
+        } catch(sampleErr){
+          log("  [CLEAN_SAMPLE_FALLBACK] " + orig.name + " " + sampleErr);
+        }
+
+        // Always rebuild selection from transparency for cleanup.
         hostDoc.activeLayer = orig;
         hostDoc.selection.deselect();
-
         try { selectTransparencyOfActiveLayer(); } catch(e1){}
         if(!hasSelection(hostDoc)){
           log("CLEAN SKIP: " + orig.name + " (no selection)");
@@ -131,18 +171,17 @@ app.bringToFront();
           continue;
         }
 
-        try { sampled = sampleLayerInkColor(hostDoc, orig); } catch(e2){}
+        var stale = findChannelByName(hostDoc, "__TMP_CLEAN_ALPHA__");
+        if(stale){ try { stale.remove(); } catch(e3){} }
 
-        if(tmp){ try { tmp.remove(); } catch(e3){} }
         tmp = hostDoc.channels.add();
         tmp.name = "__TMP_CLEAN_ALPHA__";
         hostDoc.selection.store(tmp);
         hostDoc.selection.deselect();
 
-        try {
-          hostDoc.activeChannels = [tmp];
-          thresholdActiveChannel(ALPHA_THRESHOLD);
-        } catch(e4){}
+        selectChannelByName(hostDoc, tmp.name);
+        thresholdActiveChannel(ALPHA_THRESHOLD);
+        restoreCompositeChannels(hostDoc);
 
         hostDoc.selection.load(tmp, SelectionType.REPLACE);
 
@@ -163,12 +202,17 @@ app.bringToFront();
         orig.visible = false;
         clean.visible = true;
         log("CLEAN: " + orig.name + " -> " + clean.name);
+      } catch(layerErr) {
+        log("CLEAN ERROR: " + orig.name + " " + layerErr);
+        hostDoc.selection.deselect();
       } finally {
         if(tmp){ try { tmp.remove(); } catch(e7){} }
         if(layerChannels){
           try { hostDoc.activeChannels = layerChannels; } catch(e8){}
         } else if(oldChannels){
           try { hostDoc.activeChannels = oldChannels; } catch(e9){}
+        } else {
+          restoreCompositeChannels(hostDoc);
         }
       }
     }
