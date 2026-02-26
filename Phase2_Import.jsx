@@ -28,6 +28,9 @@ app.bringToFront();
   function sanitizeName(name){ return safeTrim(String(name).replace(/[\/\\:\*\?"<>\|]/g, "_")); }
   function cTID(s){ return charIDToTypeID(s); }
   function sTID(s){ return stringIDToTypeID(s); }
+  var CLEAN_INPUT_BEFORE_TRAP = true;
+  var ALPHA_THRESHOLD = 128; // 0-255
+  var EDGE_BIAS_PX = 0; // +expand / -contract
 
   function hasSelection(doc){
     try { doc.selection.bounds; return true; }
@@ -44,6 +47,101 @@ app.bringToFront();
     desc.putReference(cTID("null"), refSel);
     desc.putReference(cTID("T   "), refTrsp);
     executeAction(cTID("setd"), desc, DialogModes.NO);
+  }
+
+  function logicalInkName(name){
+    name = String(name);
+    return (name.indexOf("CLEAN__") === 0) ? name.substring(7) : name;
+  }
+
+  function findChannelByName(doc, channelName){
+    for(var i=0;i<doc.channels.length;i++){
+      if(doc.channels[i].name === channelName) return doc.channels[i];
+    }
+    return null;
+  }
+
+  function thresholdActiveChannel(level){
+    var d = new ActionDescriptor();
+    d.putInteger(cTID("Lvl "), level);
+    executeAction(cTID("Thrs"), d, DialogModes.NO);
+  }
+
+  function cleanInkLayersNonDestructive(hostDoc){
+    log("CLEAN: begin preflight alpha-threshold cleanup");
+
+    var targets = [];
+    for(var i = hostDoc.layers.length - 2; i >= 1; i--){
+      var L = hostDoc.layers[i];
+      if(L.typename === "ArtLayer" && L.visible) targets.push(L);
+    }
+
+    var oldActive = hostDoc.activeLayer;
+    var oldFg = app.foregroundColor;
+    var oldChannels = null;
+    try { oldChannels = hostDoc.activeChannels; } catch(e0){}
+
+    for(var t=0; t<targets.length; t++){
+      var orig = targets[t];
+      var cleanName = "CLEAN__" + orig.name;
+      hostDoc.activeLayer = orig;
+      hostDoc.selection.deselect();
+
+      try { selectTransparencyOfActiveLayer(); } catch(e1){}
+      if(!hasSelection(hostDoc)){
+        log("CLEAN SKIP: " + orig.name + " (no selection)");
+        hostDoc.selection.deselect();
+        continue;
+      }
+
+      var sampled = null;
+      try { sampled = sampleLayerInkColor(hostDoc, orig); } catch(e2){}
+
+      var tmp = findChannelByName(hostDoc, "__TMP_CLEAN_ALPHA__");
+      if(tmp){ try { tmp.remove(); } catch(e3){} }
+
+      tmp = hostDoc.channels.add();
+      tmp.name = "__TMP_CLEAN_ALPHA__";
+      hostDoc.selection.store(tmp);
+      hostDoc.selection.deselect();
+
+      try {
+        hostDoc.activeChannels = [tmp];
+        thresholdActiveChannel(ALPHA_THRESHOLD);
+      } catch(e4){}
+
+      hostDoc.selection.load(tmp, SelectionType.REPLACE);
+
+      if(EDGE_BIAS_PX > 0){
+        try { hostDoc.selection.expand(EDGE_BIAS_PX); } catch(e5){}
+      } else if(EDGE_BIAS_PX < 0){
+        try { hostDoc.selection.contract(Math.abs(EDGE_BIAS_PX)); } catch(e6){}
+      }
+
+      var clean = hostDoc.artLayers.add();
+      clean.name = cleanName;
+      clean.move(orig, ElementPlacement.PLACEBEFORE);
+      hostDoc.activeLayer = clean;
+      if(sampled) app.foregroundColor = sampled;
+      hostDoc.selection.fill(app.foregroundColor, ColorBlendMode.NORMAL, 100, false);
+      hostDoc.selection.deselect();
+
+      orig.visible = false;
+      clean.visible = true;
+      log("CLEAN: " + orig.name + " -> " + clean.name);
+
+      try { tmp.remove(); } catch(e7){}
+      if(oldChannels){
+        try { hostDoc.activeChannels = oldChannels; } catch(e8){}
+      }
+    }
+
+    hostDoc.selection.deselect();
+    try { app.foregroundColor = oldFg; } catch(e9){}
+    try { hostDoc.activeLayer = oldActive; } catch(e10){}
+    if(oldChannels){
+      try { hostDoc.activeChannels = oldChannels; } catch(e11){}
+    }
   }
 
   function selectVectorMask(){
@@ -226,7 +324,7 @@ app.bringToFront();
   }
 
   function findColorGroup(doc, sourceLayerName){
-    var want = "COLOR__" + sanitizeName(sourceLayerName);
+    var want = "COLOR__" + sanitizeName(logicalInkName(sourceLayerName));
     function walk(container){
       for(var i=0;i<container.layerSets.length;i++){
         var g = container.layerSets[i];
@@ -249,6 +347,12 @@ app.bringToFront();
       }
     }
     return null;
+  }
+
+  function findSourceBaseLayer(sourceGroup, sourceName){
+    var clean = findArtLayerByName(sourceGroup, "CLEAN__" + sourceName);
+    if(clean) return clean;
+    return findArtLayerByName(sourceGroup, sourceName);
   }
 
   function createTrapLayerInSourceGroup(doc, sourceGroup, sourceBaseLayer, trapName){
@@ -469,6 +573,10 @@ if(!folder) return;
       return;
     }
 
+    if(CLEAN_INPUT_BEFORE_TRAP){
+      cleanInkLayersNonDestructive(hostDoc);
+    }
+
     var colorsBottomToTop = [];
     for(var i = hostDoc.layers.length - 2; i >= 1; i--){
       var L = hostDoc.layers[i];
@@ -477,10 +585,11 @@ if(!folder) return;
 
     for(var c=0;c<colorsBottomToTop.length;c++){
       var base = colorsBottomToTop[c];
-      var existing = findColorGroup(hostDoc, base.name);
+      var baseInkName = logicalInkName(base.name);
+      var existing = findColorGroup(hostDoc, baseInkName);
       if(!existing){
         log("Wrapping missing group for: " + base.name);
-        wrapLayerInGroup(hostDoc, base, "COLOR__" + sanitizeName(base.name));
+        wrapLayerInGroup(hostDoc, base, "COLOR__" + sanitizeName(baseInkName));
       }
     }
 
@@ -503,9 +612,9 @@ if(!folder) return;
         continue;
       }
 
-      var sourceBase = findArtLayerByName(sourceGroup, spec.source);
+      var sourceBase = findSourceBaseLayer(sourceGroup, spec.source);
       if(!sourceBase){
-        log("  SKIP: no base ArtLayer named '" + spec.source + "' inside " + sourceGroup.name);
+        log("  SKIP: no base ArtLayer named 'CLEAN__" + spec.source + "' or '" + spec.source + "' inside " + sourceGroup.name);
         continue;
       }
 
