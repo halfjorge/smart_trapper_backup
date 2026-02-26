@@ -60,7 +60,7 @@ app.bringToFront();
   function sanitizeName(name){ return safeTrim(String(name).replace(/[\/\\:\*\?"<>\|]/g, "_")); }
   function cTID(s){ return charIDToTypeID(s); }
   function sTID(s){ return stringIDToTypeID(s); }
-  var ALPHA_THRESHOLD = 128; // 0-255
+  var ALPHA_THRESHOLD = 1; // 0-255
   var EDGE_BIAS_PX = 0; // +expand / -contract
 
   if (typeof JSON === "undefined") JSON = {};
@@ -263,6 +263,7 @@ app.bringToFront();
 
   function cleanInkLayersNonDestructive(hostDoc){
     log("CLEAN: begin preflight alpha-threshold cleanup");
+    log("CLEAN: threshold=" + ALPHA_THRESHOLD + " edgeBias=" + EDGE_BIAS_PX);
 
     var targets = [];
     for(var i = hostDoc.layers.length - 2; i >= 1; i--){
