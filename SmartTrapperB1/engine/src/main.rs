@@ -127,7 +127,8 @@ fn main()->Result<()>{
 
     let trap_px=args.trap_px.unwrap_or(job.tolerance as i32).max(0);
 
-    // Load plates
+    // Load plates in stack order (bottom -> top).
+    // job.colors is exported bottom -> top, then KEY sits above all colors.
     let mut plate_names=Vec::new();
     let mut plates=Vec::new();
 
@@ -138,6 +139,14 @@ fn main()->Result<()>{
         plate_names.push(c.name.clone());
         plates.push(alpha_to_bit(w,h,&rgba));
     }
+
+    let key_file=job.files.iter()
+        .find(|f|f.kind=="KEY" || f.name==job.keyLayerName)
+        .context("missing KEY mask file in job.json")?;
+    let (kw,kh,key_rgba)=read_mask_rgba(&job_folder.join(&key_file.png))?;
+    if kw!=w||kh!=h{ anyhow::bail!("key mask size mismatch"); }
+    plate_names.push(job.keyLayerName.clone());
+    plates.push(alpha_to_bit(w,h,&key_rgba));
 
     // Detect touching boundaries
     let mut pair_boundary:HashMap<(usize,usize),Vec<u8>>=HashMap::new();
