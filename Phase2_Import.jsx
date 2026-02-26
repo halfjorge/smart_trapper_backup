@@ -28,7 +28,6 @@ app.bringToFront();
   function sanitizeName(name){ return safeTrim(String(name).replace(/[\/\\:\*\?"<>\|]/g, "_")); }
   function cTID(s){ return charIDToTypeID(s); }
   function sTID(s){ return stringIDToTypeID(s); }
-  var CLEAN_INPUT_BEFORE_TRAP = true;
   var ALPHA_THRESHOLD = 128; // 0-255
   var EDGE_BIAS_PX = 0; // +expand / -contract
 
@@ -84,63 +83,69 @@ app.bringToFront();
     for(var t=0; t<targets.length; t++){
       var orig = targets[t];
       var cleanName = "CLEAN__" + orig.name;
-      hostDoc.activeLayer = orig;
-      hostDoc.selection.deselect();
-
-      try { selectTransparencyOfActiveLayer(); } catch(e1){}
-      if(!hasSelection(hostDoc)){
-        log("CLEAN SKIP: " + orig.name + " (no selection)");
-        hostDoc.selection.deselect();
-        continue;
-      }
-
       var sampled = null;
-      try { sampled = sampleLayerInkColor(hostDoc, orig); } catch(e2){}
-
       var tmp = findChannelByName(hostDoc, "__TMP_CLEAN_ALPHA__");
-      if(tmp){ try { tmp.remove(); } catch(e3){} }
-
-      tmp = hostDoc.channels.add();
-      tmp.name = "__TMP_CLEAN_ALPHA__";
-      hostDoc.selection.store(tmp);
-      hostDoc.selection.deselect();
+      var layerChannels = null;
+      try { layerChannels = hostDoc.activeChannels; } catch(e0a){}
 
       try {
-        hostDoc.activeChannels = [tmp];
-        thresholdActiveChannel(ALPHA_THRESHOLD);
-      } catch(e4){}
+        hostDoc.activeLayer = orig;
+        hostDoc.selection.deselect();
 
-      hostDoc.selection.load(tmp, SelectionType.REPLACE);
+        try { selectTransparencyOfActiveLayer(); } catch(e1){}
+        if(!hasSelection(hostDoc)){
+          log("CLEAN SKIP: " + orig.name + " (no selection)");
+          hostDoc.selection.deselect();
+          continue;
+        }
 
-      if(EDGE_BIAS_PX > 0){
-        try { hostDoc.selection.expand(EDGE_BIAS_PX); } catch(e5){}
-      } else if(EDGE_BIAS_PX < 0){
-        try { hostDoc.selection.contract(Math.abs(EDGE_BIAS_PX)); } catch(e6){}
-      }
+        try { sampled = sampleLayerInkColor(hostDoc, orig); } catch(e2){}
 
-      var clean = hostDoc.artLayers.add();
-      clean.name = cleanName;
-      clean.move(orig, ElementPlacement.PLACEBEFORE);
-      hostDoc.activeLayer = clean;
-      if(sampled) app.foregroundColor = sampled;
-      hostDoc.selection.fill(app.foregroundColor, ColorBlendMode.NORMAL, 100, false);
-      hostDoc.selection.deselect();
+        if(tmp){ try { tmp.remove(); } catch(e3){} }
+        tmp = hostDoc.channels.add();
+        tmp.name = "__TMP_CLEAN_ALPHA__";
+        hostDoc.selection.store(tmp);
+        hostDoc.selection.deselect();
 
-      orig.visible = false;
-      clean.visible = true;
-      log("CLEAN: " + orig.name + " -> " + clean.name);
+        try {
+          hostDoc.activeChannels = [tmp];
+          thresholdActiveChannel(ALPHA_THRESHOLD);
+        } catch(e4){}
 
-      try { tmp.remove(); } catch(e7){}
-      if(oldChannels){
-        try { hostDoc.activeChannels = oldChannels; } catch(e8){}
+        hostDoc.selection.load(tmp, SelectionType.REPLACE);
+
+        if(EDGE_BIAS_PX > 0){
+          try { hostDoc.selection.expand(EDGE_BIAS_PX); } catch(e5){}
+        } else if(EDGE_BIAS_PX < 0){
+          try { hostDoc.selection.contract(Math.abs(EDGE_BIAS_PX)); } catch(e6){}
+        }
+
+        var clean = hostDoc.artLayers.add();
+        clean.name = cleanName;
+        clean.move(orig, ElementPlacement.PLACEBEFORE);
+        hostDoc.activeLayer = clean;
+        if(sampled) app.foregroundColor = sampled;
+        hostDoc.selection.fill(app.foregroundColor, ColorBlendMode.NORMAL, 100, false);
+        hostDoc.selection.deselect();
+
+        orig.visible = false;
+        clean.visible = true;
+        log("CLEAN: " + orig.name + " -> " + clean.name);
+      } finally {
+        if(tmp){ try { tmp.remove(); } catch(e7){} }
+        if(layerChannels){
+          try { hostDoc.activeChannels = layerChannels; } catch(e8){}
+        } else if(oldChannels){
+          try { hostDoc.activeChannels = oldChannels; } catch(e9){}
+        }
       }
     }
 
     hostDoc.selection.deselect();
-    try { app.foregroundColor = oldFg; } catch(e9){}
-    try { hostDoc.activeLayer = oldActive; } catch(e10){}
+    try { app.foregroundColor = oldFg; } catch(e10){}
+    try { hostDoc.activeLayer = oldActive; } catch(e11){}
     if(oldChannels){
-      try { hostDoc.activeChannels = oldChannels; } catch(e11){}
+      try { hostDoc.activeChannels = oldChannels; } catch(e12){}
     }
   }
 
@@ -183,12 +188,15 @@ app.bringToFront();
     return false;
   }
 
-  // JSON.parse fallback
   function parseJSON(txt){
     txt = String(txt);
-    try { if (typeof JSON !== "undefined" && JSON && JSON.parse) return JSON.parse(txt); } catch(e1){}
-    try { return eval("(" + txt + ")"); } catch(e2){
-      throw new Error("Could not parse JSON: " + e2);
+    if (!(typeof JSON !== "undefined" && JSON && JSON.parse)){
+      throw new Error("Could not parse JSON: JSON.parse not available");
+    }
+    try {
+      return JSON.parse(txt);
+    } catch(e1){
+      throw new Error("Could not parse JSON: " + e1.message);
     }
   }
 
@@ -539,7 +547,7 @@ app.bringToFront();
   var folder = null;
 
   try{
-    if(!documents.length){
+    if(!app.documents.length){
       alert("Open your PSD first, then run this importer.");
       return;
     }
@@ -557,15 +565,15 @@ app.bringToFront();
     }
 
     // If controller provided folder, use it.
-// Otherwise fall back to manual selection.
-if ($.global.PHASE2_IMPORT_FOLDER) {
-    folder = new Folder($.global.PHASE2_IMPORT_FOLDER);
-    log("Using controller-provided folder: " + folder.fsName);
-} else {
-    folder = Folder.selectDialog("Select JOB folder (contains traps.json + traps/ + debug_*.png)");
-}
+    // Otherwise fall back to manual selection.
+    if ($.global.PHASE2_IMPORT_FOLDER) {
+      folder = new Folder($.global.PHASE2_IMPORT_FOLDER);
+      log("Using controller-provided folder: " + folder.fsName);
+    } else {
+      folder = Folder.selectDialog("Select JOB folder (contains traps.json + traps/ + debug_*.png)");
+    }
 
-if(!folder) return;
+    if (!folder) return;
 
     log("Folder: " + folder.fsName);
 
@@ -656,7 +664,7 @@ if(!folder) return;
       hostDoc.selection.deselect();
 
       imported++;
-      log("  ✓ Imported: " + trapName + " (in " + sourceGroup.name + ")");
+      log("  OK Imported: " + trapName + " (in " + sourceGroup.name + ")");
     }
 
     log("=== SUMMARY ===");
