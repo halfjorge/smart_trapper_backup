@@ -1,4 +1,4 @@
-#target photoshop
+﻿#target photoshop
 app.bringToFront();
 
 (function () {
@@ -12,13 +12,45 @@ app.bringToFront();
   var LOG = [];
   function log(s){ LOG.push(String(s)); }
   function flushLog(folder){
+    var body = LOG.join("\r\n");
+    var primaryErr = null;
+
+    if(folder){
+      try{
+        var targetFolder = (folder instanceof Folder) ? folder : new Folder(String(folder));
+        if(!targetFolder.exists){
+          throw new Error("Folder does not exist: " + targetFolder.fsName);
+        }
+
+        var out = new File(targetFolder.fsName + "/import_debug_log.txt");
+        if(!out.open("w")){
+          throw new Error("Cannot open log for writing: " + out.fsName);
+        }
+        out.encoding = "UTF8";
+        out.write(body);
+        out.close();
+        return out.fsName;
+      }catch(e1){
+        primaryErr = e1;
+      }
+    }
+
     try{
-      var f = new File(folder.fsName + "/import_debug_log.txt");
-      f.open("w");
-      f.encoding = "UTF8";
-      f.write(LOG.join("\r\n"));
-      f.close();
-    }catch(e){}
+      var fallback = new File(Folder.desktop.fsName + "/import_debug_log_FALLBACK.txt");
+      if(!fallback.open("w")){
+        throw new Error("Cannot open fallback log for writing: " + fallback.fsName);
+      }
+      fallback.encoding = "UTF8";
+      fallback.write(body);
+      fallback.close();
+      return fallback.fsName;
+    }catch(e2){
+      var msg = "Failed to write debug log.\n";
+      if(primaryErr) msg += "Primary write error: " + primaryErr + "\n";
+      msg += "Fallback write error: " + e2;
+      alert(msg);
+      return null;
+    }
   }
 
   // ======================
@@ -573,7 +605,18 @@ app.bringToFront();
       folder = Folder.selectDialog("Select JOB folder (contains traps.json + traps/ + debug_*.png)");
     }
 
-    if (!folder) return;
+    if (!folder){
+      log("Import cancelled: no job folder selected.");
+      flushLog(null);
+      return;
+    }
+    if (!(folder instanceof Folder)) folder = new Folder(String(folder));
+    if (!folder.exists) {
+      alert("JOB folder does not exist:\n" + folder.fsName);
+      log("ERROR: JOB folder does not exist: " + folder.fsName);
+      flushLog(null);
+      return;
+    }
 
     log("Folder: " + folder.fsName);
 
@@ -587,6 +630,8 @@ app.bringToFront();
 
     // Ensure COLOR__ groups exist (wrap visible ArtLayers between KEY and PAPER if needed)
     if(hostDoc.layers.length < 3){
+      log("ERROR: PSD needs at least 3 top-level layers (KEY top, PAPER bottom, colors in between).");
+      flushLog(folder);
       alert("PSD needs at least 3 top-level layers (KEY top, PAPER bottom, colors in between).");
       return;
     }
@@ -681,8 +726,9 @@ app.bringToFront();
 
   } catch(eTop){
     log("FATAL: " + eTop);
-    try { if(folder) flushLog(folder); } catch(e2){}
-    alert("Import failed.\nSee import_debug_log.txt in the export folder.");
+    if(folder) flushLog(folder);
+    else flushLog(null);
+    alert("Import failed:\n" + eTop + "\n\nA debug log was written (job folder or Desktop fallback).");
   } finally {
     try { app.displayDialogs = prevDialogs; } catch(e3) {}
   }
