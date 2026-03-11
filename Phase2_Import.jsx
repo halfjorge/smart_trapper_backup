@@ -11,6 +11,42 @@ app.bringToFront();
   // ======================
   var LOG = [];
   function log(s){ LOG.push(String(s)); }
+  function logDocState(doc, label){
+    try{
+      log("[" + label + "] doc=" + doc.name);
+    }catch(e){}
+    try{
+      log("[" + label + "] activeLayer=" + (doc.activeLayer ? doc.activeLayer.name : "null"));
+    }catch(e){}
+    try{
+      var chNames = [];
+      for(var i=0;i<doc.activeChannels.length;i++) chNames.push(doc.activeChannels[i].name);
+      log("[" + label + "] activeChannels=" + chNames.join(", "));
+    }catch(e){}
+    try{
+      log("[" + label + "] hasSelection=" + hasSelection(doc));
+    }catch(e){}
+    try{
+      if(hasSelection(doc)){
+        var b = doc.selection.bounds;
+        log("[" + label + "] selBounds=" +
+          b[0].as("px") + "," + b[1].as("px") + "," +
+          b[2].as("px") + "," + b[3].as("px"));
+      }
+    }catch(e){}
+  }
+
+  function step(label, fn){
+    log("STEP BEGIN: " + label);
+    try{
+      var out = fn();
+      log("STEP OK: " + label);
+      return out;
+    }catch(e){
+      log("STEP FAIL: " + label + " :: " + e);
+      throw e;
+    }
+  }
   function flushLog(folder){
     var body = LOG.join("\r\n");
     var primaryErr = null;
@@ -62,6 +98,38 @@ app.bringToFront();
   function sTID(s){ return stringIDToTypeID(s); }
   var ALPHA_THRESHOLD = 8; // 0-255
   var EDGE_BIAS_PX = 0; // +expand / -contract
+  var INK_COLOR_CACHE = {};
+
+  function configurePreflightCleanupOptions(){
+    alert(
+      "Preflight cleanup settings\n\n" +
+      "Alpha threshold: higher removes more faint/fuzzy pixels.\n" +
+      "Edge bias: positive expands, negative contracts, zero keeps size."
+    );
+
+    var alphaInput = prompt("Alpha threshold (0-255). Higher = stronger cleanup.", String(ALPHA_THRESHOLD));
+    if(alphaInput === null) return false;
+
+    var alphaValue = parseInt(String(alphaInput), 10);
+    if(isNaN(alphaValue) || alphaValue < 0 || alphaValue > 255){
+      alert("Alpha threshold must be a whole number from 0 to 255.");
+      return false;
+    }
+
+    var edgeInput = prompt("Edge bias in pixels. Positive expands, negative contracts.", String(EDGE_BIAS_PX));
+    if(edgeInput === null) return false;
+
+    var edgeValue = parseInt(String(edgeInput), 10);
+    if(isNaN(edgeValue)){
+      alert("Edge bias must be a whole number in pixels.");
+      return false;
+    }
+
+    ALPHA_THRESHOLD = alphaValue;
+    EDGE_BIAS_PX = edgeValue;
+    log("Preflight cleanup settings: alphaThreshold=" + ALPHA_THRESHOLD + ", edgeBiasPx=" + EDGE_BIAS_PX);
+    return true;
+  }
 
   if (typeof JSON === "undefined") JSON = {};
   if (!JSON.parse){
@@ -261,6 +329,16 @@ app.bringToFront();
     try { doc.activeChannels = doc.componentChannels; } catch(e){}
   }
 
+  function ensureCompositeChannels(doc){
+    try{
+      doc.activeChannels = doc.componentChannels;
+    }catch(e){
+      try{
+        restoreCompositeChannels(doc);
+      }catch(e2){}
+    }
+  }
+
   function cleanInkLayersNonDestructive(hostDoc){
     log("CLEAN: begin preflight alpha-threshold cleanup");
 
@@ -278,34 +356,13 @@ app.bringToFront();
     for(var t=0; t<targets.length; t++){
       var orig = targets[t];
       var cleanName = "CLEAN__" + orig.name;
-      var sampled = null;
       var tmp = null;
       var layerChannels = null;
       try { layerChannels = hostDoc.activeChannels; } catch(e0a){}
 
       try {
-        // Local sampling to avoid cleanup dependency on sampleLayerInkColor state changes.
         try {
-          var snap = soloLayerTopLevel(hostDoc, orig);
-          var sampleOldActive = hostDoc.activeLayer;
-          try {
-            hostDoc.activeLayer = orig;
-            if(selectLayerShapeBestEffort(hostDoc, "CLEAN_SAMPLE=" + orig.name)){
-              var pt = findSamplePointByScan(hostDoc, 25);
-              if(!pt) pt = findSamplePointByScan(hostDoc, 10);
-              if(!pt) pt = findSamplePointByScan(hostDoc, 4);
-              if(pt){
-                var sampler = hostDoc.colorSamplers.add([pt[0], pt[1]]);
-                sampled = sampler.color;
-                sampler.remove();
-                log("  [CLEAN_SAMPLE] " + orig.name + " @ (" + pt[0] + "," + pt[1] + ")");
-              }
-            }
-          } finally {
-            hostDoc.selection.deselect();
-            restoreTopLevelVisibility(hostDoc, snap);
-            try { hostDoc.activeLayer = sampleOldActive; } catch(eSa){}
-          }
+          cacheLayerInkColor(orig.name, sampleLayerInkColor(hostDoc, orig));
         } catch(sampleErr){
           log("  [CLEAN_SAMPLE_FALLBACK] " + orig.name + " " + sampleErr);
         }
@@ -344,8 +401,7 @@ app.bringToFront();
         clean.name = cleanName;
         clean.move(orig, ElementPlacement.PLACEBEFORE);
         hostDoc.activeLayer = clean;
-        if(sampled) app.foregroundColor = sampled;
-        hostDoc.selection.fill(app.foregroundColor, ColorBlendMode.NORMAL, 100, false);
+        fillSelectionWithLayerColor(orig.name);
         hostDoc.selection.deselect();
 
         orig.visible = false;
@@ -475,72 +531,257 @@ app.bringToFront();
 
   // ---- Find sample point by scanning inside selection bounds
   function findSamplePointByScan(doc, scanStep){
-    if(!hasSelection(doc)) return null;
+    log("SCAN START step=" + scanStep);
+    if(!hasSelection(doc)){
+      log("SCAN ABORT: no selection");
+      return null;
+    }
 
     var b = doc.selection.bounds;
-    var L = Math.floor(b[0].as("px"));
-    var T = Math.floor(b[1].as("px"));
-    var R = Math.floor(b[2].as("px"));
-    var B = Math.floor(b[3].as("px"));
+    var rawL = Math.floor(b[0].as("px"));
+    var rawT = Math.floor(b[1].as("px"));
+    var rawR = Math.floor(b[2].as("px"));
+    var rawB = Math.floor(b[3].as("px"));
+    var maxX = Math.max(0, Math.floor(doc.width.as("px")) - 1);
+    var maxY = Math.max(0, Math.floor(doc.height.as("px")) - 1);
+    var L = Math.max(0, rawL);
+    var T = Math.max(0, rawT);
+    var R = Math.min(maxX + 1, rawR);
+    var B = Math.min(maxY + 1, rawB);
+    log("SCAN BOUNDS RAW: " + [rawL,rawT,rawR,rawB].join(","));
+    log("SCAN BOUNDS CLAMPED: " + [L,T,R,B].join(","));
 
-    var tmp = doc.channels.add();
-    tmp.name = "__TMP_SEL_SCAN__";
-    doc.selection.store(tmp);
-    doc.selection.deselect();
-
-    function testPoint(x,y){
-      doc.selection.deselect();
-      doc.selection.select([[x,y],[x+1,y],[x+1,y+1],[x,y+1]]);
-      doc.selection.load(tmp, SelectionType.INTERSECT);
-      return hasSelection(doc);
+    if(L >= R || T >= B){
+      log("SCAN ABORT: clamped bounds are empty");
+      return null;
     }
 
-    var found = null;
-    for(var y2=T+1; y2<=B-2; y2+=scanStep){
-      for(var x2=L+1; x2<=R-2; x2+=scanStep){
-        if(testPoint(x2,y2)){ found = [x2,y2]; break; }
+    var tmp = null;
+    try{
+      tmp = step("channels.add tmp scan", function(){
+        var ch = doc.channels.add();
+        ch.name = "__TMP_SEL_SCAN__";
+        return ch;
+      });
+
+      step("selection.store tmp scan", function(){
+        doc.selection.store(tmp);
+      });
+
+      step("selection.deselect after store", function(){
+        doc.selection.deselect();
+      });
+
+      step("restoreCompositeChannels after tmp store", function(){
+        restoreCompositeChannels(doc);
+      });
+
+      function testPoint(x,y){
+        log("TEST POINT: " + x + "," + y);
+        step("restoreCompositeChannels testPoint", function(){
+          restoreCompositeChannels(doc);
+        });
+        step("selection.deselect testPoint", function(){
+          doc.selection.deselect();
+        });
+        step("selection.select 1px box", function(){
+          doc.selection.select([[x,y],[x+1,y],[x+1,y+1],[x,y+1]]);
+        });
+        step("selection.load INTERSECT tmp", function(){
+          doc.selection.load(tmp, SelectionType.INTERSECT);
+        });
+        return hasSelection(doc);
       }
-      if(found) break;
-    }
 
-    doc.selection.deselect();
-    try { tmp.remove(); } catch(e){}
-    return found;
+      var found = null;
+      for(var y2=Math.max(T, T+1); y2<=Math.min(maxY, B-2); y2+=scanStep){
+        for(var x2=Math.max(L, L+1); x2<=Math.min(maxX, R-2); x2+=scanStep){
+          if(testPoint(x2,y2)){
+            found = [x2,y2];
+            log("SCAN FOUND: " + found[0] + "," + found[1]);
+            break;
+          }
+        }
+        if(found) break;
+      }
+
+      step("selection.deselect end scan", function(){
+        doc.selection.deselect();
+      });
+      step("restoreCompositeChannels end scan", function(){
+        restoreCompositeChannels(doc);
+      });
+
+      return found;
+
+    } catch(e){
+      log("SCAN ERROR step=" + scanStep + " :: " + e);
+      logDocState(doc, "scan-error-state");
+      throw e;
+    } finally {
+      if(tmp){
+        try { tmp.remove(); log("SCAN TMP REMOVED"); } catch(e2){ log("SCAN TMP REMOVE ERR: " + e2); }
+      }
+    }
   }
 
   // ---- Sample SOURCE ink color (once per source)
   function sampleLayerInkColor(doc, layer){
-    var snap = soloLayerTopLevel(doc, layer);
+    log("SAMPLE START: " + layer.name);
+    var oldDoc = app.activeDocument;
     var oldActive = doc.activeLayer;
-    doc.activeLayer = layer;
+    var tmpDoc = null;
 
-    if(!selectLayerShapeBestEffort(doc, "SAMPLE=" + layer.name)){
-      restoreTopLevelVisibility(doc, snap);
-      try { doc.activeLayer = oldActive; } catch(e){}
-      throw new Error("Could not create selection for sampling: " + layer.name);
+    try{
+      step("set activeLayer " + layer.name, function(){
+        app.activeDocument = doc;
+        doc.activeLayer = layer;
+      });
+
+      step("create isolated sample doc " + layer.name, function(){
+        tmpDoc = app.documents.add(
+          doc.width,
+          doc.height,
+          doc.resolution,
+          "__TMP_INK_SAMPLE__",
+          NewDocumentMode.RGB,
+          DocumentFill.TRANSPARENT
+        );
+      });
+
+      step("duplicate sample layer into temp doc " + layer.name, function(){
+        app.activeDocument = doc;
+        doc.activeLayer = layer;
+        layer.duplicate(tmpDoc, ElementPlacement.PLACEATBEGINNING);
+      });
+
+      app.activeDocument = tmpDoc;
+      tmpDoc.activeLayer = tmpDoc.layers[0];
+      tmpDoc.selection.deselect();
+
+      var gotSel = step("select transparency in temp doc " + layer.name, function(){
+        selectTransparencyOfActiveLayer();
+        return hasSelection(tmpDoc);
+      });
+      if(!gotSel){
+        throw new Error("Could not create isolated selection for sampling: " + layer.name);
+      }
+
+      step("restoreCompositeChannels before isolated scan", function(){
+        restoreCompositeChannels(tmpDoc);
+      });
+
+      var pt = null;
+      step("find isolated sample point 25", function(){
+        pt = findSamplePointByScan(tmpDoc, 25);
+      });
+      if(!pt){
+        step("find isolated sample point 10", function(){
+          pt = findSamplePointByScan(tmpDoc, 10);
+        });
+      }
+      if(!pt){
+        step("find isolated sample point 4", function(){
+          pt = findSamplePointByScan(tmpDoc, 4);
+        });
+      }
+      if(!pt){
+        throw new Error("Could not find isolated sample point: " + layer.name);
+      }
+
+      log("SAMPLE POINT: " + layer.name + " @ (" + pt[0] + "," + pt[1] + ")");
+
+      var c = null;
+      step("color sampler isolated " + layer.name, function(){
+        var ux = new UnitValue(pt[0], "px");
+        var uy = new UnitValue(pt[1], "px");
+        var s = tmpDoc.colorSamplers.add([ux, uy]);
+        c = s.color;
+        s.remove();
+      });
+
+      step("selection.deselect temp doc after sample", function(){
+        tmpDoc.selection.deselect();
+      });
+
+      app.activeDocument = doc;
+      doc.activeLayer = oldActive;
+      app.foregroundColor = c;
+
+      log("SAMPLE RGB: " + layer.name + " -> (" + c.rgb.red + "," + c.rgb.green + "," + c.rgb.blue + ")");
+      return c;
+
+    } catch(e){
+      log("SAMPLE ERROR: " + layer.name + " :: " + e);
+      try { app.activeDocument = doc; } catch(e0){}
+      try { doc.selection.deselect(); } catch(e1){ log("cleanup deselect err: " + e1); }
+      try { doc.activeLayer = oldActive; } catch(e2){ log("cleanup restore active err: " + e2); }
+      throw e;
+    } finally {
+      if(tmpDoc){
+        try{
+          app.activeDocument = tmpDoc;
+          tmpDoc.close(SaveOptions.DONOTSAVECHANGES);
+        }catch(e3){
+          log("cleanup temp sample doc err: " + e3);
+        }
+      }
+      try { app.activeDocument = oldDoc; } catch(e4){}
     }
+  }
 
-    var pt = findSamplePointByScan(doc, 25);
-    if(!pt) pt = findSamplePointByScan(doc, 10);
-    if(!pt) pt = findSamplePointByScan(doc, 4);
-    if(!pt){
-      doc.selection.deselect();
-      restoreTopLevelVisibility(doc, snap);
-      try { doc.activeLayer = oldActive; } catch(e){}
-      throw new Error("Could not find sample point: " + layer.name);
+  function cacheLayerInkColor(layerName, sampledColor){
+    if(!sampledColor) throw new Error("No sampled color for layer: " + layerName);
+
+    INK_COLOR_CACHE[layerName] = {
+      r: sampledColor.rgb.red,
+      g: sampledColor.rgb.green,
+      b: sampledColor.rgb.blue
+    };
+    log("INK CACHE: " + layerName + " -> (" +
+      INK_COLOR_CACHE[layerName].r + "," +
+      INK_COLOR_CACHE[layerName].g + "," +
+      INK_COLOR_CACHE[layerName].b + ")");
+  }
+
+  function getLayerInkColor(layerName){
+    var c = INK_COLOR_CACHE[layerName];
+
+    if(!c) throw new Error("Ink color not cached for layer: " + layerName);
+
+    var sc = new SolidColor();
+    sc.rgb.red = c.r;
+    sc.rgb.green = c.g;
+    sc.rgb.blue = c.b;
+    return sc;
+  }
+
+  function setForegroundFromLayer(layerName){
+    var sc = getLayerInkColor(layerName);
+    app.foregroundColor = sc;
+  }
+
+  function fillSelectionWithLayerColor(layerName){
+    var doc = app.activeDocument;
+
+    setForegroundFromLayer(layerName);
+    doc.selection.fill(app.foregroundColor, ColorBlendMode.NORMAL, 100, false);
+  }
+
+  function initializeInkColors(doc, layerList){
+    for(var i = 0; i < layerList.length; i++){
+      var layer = layerList[i];
+      var sampled = sampleLayerInkColor(doc, layer);
+      cacheLayerInkColor(layer.name, sampled);
     }
+  }
 
-    var sampler = doc.colorSamplers.add([pt[0], pt[1]]);
-    var c = sampler.color;
-    sampler.remove();
-
-    doc.selection.deselect();
-    restoreTopLevelVisibility(doc, snap);
-    try { doc.activeLayer = oldActive; } catch(e){}
-
-    app.foregroundColor = c;
-    log("  [SAMPLE] " + layer.name + " @ ("+pt[0]+","+pt[1]+")");
-    return c;
+  function printInkCache(){
+    for(var k in INK_COLOR_CACHE){
+      if(!INK_COLOR_CACHE.hasOwnProperty(k)) continue;
+      var c = INK_COLOR_CACHE[k];
+      $.writeln("[INK] " + k + " -> RGB(" + c.r + "," + c.g + "," + c.b + ")");
+    }
   }
 
   // ---- Grouping helpers
@@ -584,6 +825,89 @@ app.bringToFront();
     return findArtLayerByName(sourceGroup, sourceName);
   }
 
+  function findSourceSamplingLayer(sourceGroup, sourceName){
+    // Prefer the ORIGINAL layer for color sampling, even if cleanup created CLEAN__ layers.
+    // This prevents white/incorrect trap fills when cleanup rebuilt the art layer.
+    var orig = findArtLayerByName(sourceGroup, sourceName);
+    if(orig) return orig;
+
+    var clean = findArtLayerByName(sourceGroup, "CLEAN__" + sourceName);
+    if(clean) return clean;
+
+    return null;
+  }
+
+  function normalizeCleanLayerGrouping(doc){
+    for(var i = 0; i < doc.layers.length; i++){
+      var cleanLayer = doc.layers[i];
+      if(!cleanLayer || cleanLayer.typename !== "ArtLayer") continue;
+      if(cleanLayer.name.indexOf("CLEAN__") !== 0) continue;
+
+      var inkName = logicalInkName(cleanLayer.name);
+      var group = findColorGroup(doc, inkName);
+
+      if(!group){
+        group = wrapLayerInGroup(doc, cleanLayer, "COLOR__" + sanitizeName(inkName));
+      } else if(cleanLayer.parent !== group){
+        try { cleanLayer.move(group, ElementPlacement.INSIDE); } catch(e0){}
+      }
+
+      var orig = findArtLayerByName(group, inkName);
+      if(orig && orig !== cleanLayer){
+        try { cleanLayer.move(orig, ElementPlacement.PLACEBEFORE); } catch(e1){}
+        try { orig.visible = false; } catch(e2){}
+      }
+
+      try { cleanLayer.visible = true; } catch(e3){}
+    }
+  }
+
+  function getTrapOffsetFromSpec(spec){
+    var left = null;
+    var top = null;
+
+    if(spec.hasOwnProperty("left")) left = Number(spec.left);
+    if(spec.hasOwnProperty("top")) top = Number(spec.top);
+
+    if(left === null && spec.hasOwnProperty("x")) left = Number(spec.x);
+    if(top === null && spec.hasOwnProperty("y")) top = Number(spec.y);
+
+    if(left === null && spec.hasOwnProperty("offsetX")) left = Number(spec.offsetX);
+    if(top === null && spec.hasOwnProperty("offsetY")) top = Number(spec.offsetY);
+
+    if((left === null || top === null) && spec.bounds && spec.bounds.length >= 2){
+      left = Number(spec.bounds[0]);
+      top = Number(spec.bounds[1]);
+    }
+
+    if((left === null || top === null) && spec.rect && spec.rect.length >= 2){
+      left = Number(spec.rect[0]);
+      top = Number(spec.rect[1]);
+    }
+
+    if(left === null || isNaN(left)) left = 0;
+    if(top === null || isNaN(top)) top = 0;
+
+    return { left:left, top:top };
+  }
+
+  function translateSelectionSafe(doc, dx, dy){
+    if(!hasSelection(doc)) return;
+    if(dx === 0 && dy === 0) return;
+
+    var d = new ActionDescriptor();
+    var r = new ActionReference();
+    r.putProperty(charIDToTypeID("Chnl"), charIDToTypeID("fsel"));
+    d.putReference(charIDToTypeID("null"), r);
+
+    var o = new ActionDescriptor();
+    o.putUnitDouble(charIDToTypeID("Hrzn"), charIDToTypeID("#Pxl"), dx);
+    o.putUnitDouble(charIDToTypeID("Vrtc"), charIDToTypeID("#Pxl"), dy);
+    d.putObject(charIDToTypeID("T   "), charIDToTypeID("Ofst"), o);
+
+    executeAction(charIDToTypeID("move"), d, DialogModes.NO);
+  }
+
   function createTrapLayerInSourceGroup(doc, sourceGroup, sourceBaseLayer, trapName){
     var newL = doc.artLayers.add();
     newL.name = trapName;
@@ -605,54 +929,140 @@ app.bringToFront();
   // Paste into host -> get pasted alpha bounds (dstL/dstT)
   // Translate pasted by (src - dst) -> select alpha -> delete temp
   // ======================
-  function selectionFromTrapPngIntoHost_ALIGN_BY_BOUNDS(hostDoc, pngFile){
-    var d = app.open(pngFile);
-    d.activeLayer = d.layers[0];
-    d.selection.deselect();
+  function selectionFromTrapPngIntoHost_ALIGN_BY_BOUNDS(hostDoc, pngFile, spec){
+    var srcDoc = null;
+    var srcAlpha = null;
+    var hostAlpha = null;
 
-    try { selectTransparencyOfActiveLayer(); } catch(e0){}
-    if(!hasSelection(d)){
-      try { d.close(SaveOptions.DONOTSAVECHANGES); } catch(e1){}
+    try{
+      app.activeDocument = hostDoc;
+      hostDoc.selection.deselect();
+
+      srcDoc = app.open(pngFile);
+      srcDoc.activeLayer = srcDoc.layers[0];
+      srcDoc.selection.deselect();
+
+      // Build selection from PNG transparency
+      try { selectTransparencyOfActiveLayer(); } catch(e0){}
+      if(!hasSelection(srcDoc)){
+        log("  PNG transparency produced no selection: " + pngFile.fsName);
+        try { srcDoc.close(SaveOptions.DONOTSAVECHANGES); } catch(e1){}
+        return false;
+      }
+
+      // Log source selection bounds
+      try{
+        var sb = srcDoc.selection.bounds;
+        log("  SOURCE PNG selection bounds px: " +
+          Math.floor(sb[0].as("px")) + "," +
+          Math.floor(sb[1].as("px")) + "," +
+          Math.floor(sb[2].as("px")) + "," +
+          Math.floor(sb[3].as("px")));
+      }catch(e2){}
+
+      // Store source selection into a temp alpha channel in the PNG doc
+      srcAlpha = srcDoc.channels.add();
+      srcAlpha.name = "__TMP_TRAP_ALPHA_SRC__";
+      srcDoc.selection.store(srcAlpha);
+      srcDoc.selection.deselect();
+
+      // Duplicate alpha channel directly into host doc
+      srcDoc.activeChannels = [srcAlpha];
+      srcAlpha.duplicate(hostDoc, ElementPlacement.PLACEATEND);
+
+      // Close source PNG
+      try { srcDoc.close(SaveOptions.DONOTSAVECHANGES); } catch(e3){}
+      srcDoc = null;
+
+      // Find duplicated host alpha channel by name
+      app.activeDocument = hostDoc;
+      hostAlpha = findChannelByName(hostDoc, "__TMP_TRAP_ALPHA_SRC__");
+      if(!hostAlpha){
+        log("  ERROR: duplicated host alpha channel not found");
+        return false;
+      }
+
+      // Load host alpha channel as selection
+      hostDoc.selection.deselect();
+      hostDoc.selection.load(hostAlpha, SelectionType.REPLACE);
+
+      // IMPORTANT: apply the original trap offset from traps.json
+      var off = getTrapOffsetFromSpec(spec || {});
+      log("  TRAP OFFSET from spec px: " + off.left + "," + off.top);
+
+      if(off.left !== 0 || off.top !== 0){
+        translateSelectionSafe(hostDoc, off.left, off.top);
+      }
+
+      // Intersect with actual canvas, just in case
+      var canvasCh = null;
+      try{
+        canvasCh = hostDoc.channels.add();
+        canvasCh.name = "__TMP_CANVAS_BOUNDS__";
+
+        hostDoc.selection.deselect();
+        hostDoc.selection.select([
+          [0, 0],
+          [hostDoc.width.as("px"), 0],
+          [hostDoc.width.as("px"), hostDoc.height.as("px")],
+          [0, hostDoc.height.as("px")]
+        ]);
+        hostDoc.selection.store(canvasCh);
+
+        hostDoc.selection.deselect();
+        hostDoc.selection.load(hostAlpha, SelectionType.REPLACE);
+        if(off.left !== 0 || off.top !== 0){
+          translateSelectionSafe(hostDoc, off.left, off.top);
+        }
+        hostDoc.selection.load(canvasCh, SelectionType.INTERSECT);
+      }catch(eCanvas){
+        log("  canvas intersect warning: " + eCanvas);
+      }finally{
+        if(canvasCh){
+          try { canvasCh.remove(); } catch(e4){}
+        }
+      }
+
+      var ok = hasSelection(hostDoc);
+
+      if(ok){
+        try{
+          var fb = hostDoc.selection.bounds;
+          log("  FINAL HOST selection bounds px: " +
+            Math.floor(fb[0].as("px")) + "," +
+            Math.floor(fb[1].as("px")) + "," +
+            Math.floor(fb[2].as("px")) + "," +
+            Math.floor(fb[3].as("px")));
+        }catch(e5){}
+      }else{
+        log("  FINAL HOST selection is empty");
+      }
+
+      // Clean up temp host alpha channel
+      try { hostAlpha.remove(); } catch(e6){}
+
+      // Restore composite channels
+      try { restoreCompositeChannels(hostDoc); } catch(e7){}
+
+      return ok;
+
+    } catch(err){
+      log("  selectionFromTrapPngIntoHost_ALIGN_BY_BOUNDS ERROR: " + err);
+
+      try{
+        if(srcDoc) srcDoc.close(SaveOptions.DONOTSAVECHANGES);
+      }catch(e8){}
+
+      try{
+        if(hostAlpha) hostAlpha.remove();
+      }catch(e9){}
+
+      try{
+        restoreCompositeChannels(hostDoc);
+      }catch(e10){}
+
       return false;
     }
-
-    var sb = d.selection.bounds;
-    var srcL = sb[0].as("px");
-    var srcT = sb[1].as("px");
-
-    d.selection.selectAll();
-    d.selection.copy();
-    d.close(SaveOptions.DONOTSAVECHANGES);
-
-    app.activeDocument = hostDoc;
-    hostDoc.paste();
-    var pasted = hostDoc.activeLayer;
-
-    hostDoc.selection.deselect();
-    hostDoc.activeLayer = pasted;
-
-    try { selectTransparencyOfActiveLayer(); } catch(e2){}
-    if(!hasSelection(hostDoc)){
-      try { pasted.remove(); } catch(e3){}
-      return false;
-    }
-
-    var hb = hostDoc.selection.bounds;
-    var dstL = hb[0].as("px");
-    var dstT = hb[1].as("px");
-
-    var dx = srcL - dstL;
-    var dy = srcT - dstT;
-
-    try { pasted.translate(dx, dy); } catch(eMove){}
-
-    hostDoc.selection.deselect();
-    hostDoc.activeLayer = pasted;
-    try { selectTransparencyOfActiveLayer(); } catch(e4){}
-    var ok = hasSelection(hostDoc);
-
-    try { pasted.remove(); } catch(e5){}
-    return ok;
   }
 
   // =======================================================
@@ -774,12 +1184,30 @@ app.bringToFront();
     }
 
     var hostDoc = app.activeDocument;
-    var doClean = confirm("Does this file need plate cleanup before trapping?\n\nYes = clean fuzzy edges\nNo = skip cleanup");
-    if(doClean === null || typeof doClean === "undefined"){
-      return;
+    var usePipelineCleanupSettings = (typeof $.global.PHASE2_DO_CLEAN !== "undefined");
+    var doClean = false;
+
+    if(usePipelineCleanupSettings){
+      doClean = ($.global.PHASE2_DO_CLEAN === true);
+      if(doClean){
+        ALPHA_THRESHOLD = Number($.global.PHASE2_ALPHA_THRESHOLD);
+        EDGE_BIAS_PX = Number($.global.PHASE2_EDGE_BIAS_PX);
+        if(isNaN(ALPHA_THRESHOLD)) ALPHA_THRESHOLD = 8;
+        if(isNaN(EDGE_BIAS_PX)) EDGE_BIAS_PX = 0;
+      }
+    } else {
+      doClean = confirm("Does this file need plate cleanup before trapping?\n\nYes = clean fuzzy edges\nNo = skip cleanup");
+      if(doClean === null || typeof doClean === "undefined"){
+        return;
+      }
     }
+
     if(doClean){
       log("Preflight cleanup: ENABLED");
+      if(!usePipelineCleanupSettings && !configurePreflightCleanupOptions()){
+        log("Preflight cleanup configuration cancelled or invalid.");
+        return;
+      }
       cleanInkLayersNonDestructive(hostDoc);
     } else {
       log("Preflight cleanup: SKIPPED");
@@ -841,8 +1269,8 @@ app.bringToFront();
       }
     }
 
-    // Cache sampled colors per SOURCE
-    var inkCache = {};
+    normalizeCleanLayerGrouping(hostDoc);
+
     var imported = 0;
 
     log("Removing old TRAP__ layers...");
@@ -866,11 +1294,15 @@ app.bringToFront();
         continue;
       }
 
+      var sourceSampleLayer = findSourceSamplingLayer(sourceGroup, spec.source);
+      if(!sourceSampleLayer){
+        log("  SKIP: no sampling layer named '" + spec.source + "' or 'CLEAN__" + spec.source + "' inside " + sourceGroup.name);
+        continue;
+      }
+
       // Sample ink once per source
-      if(!inkCache[spec.source]){
-        inkCache[spec.source] = sampleLayerInkColor(hostDoc, sourceBase);
-      } else {
-        app.foregroundColor = inkCache[spec.source];
+      if(!INK_COLOR_CACHE[spec.source]){
+        cacheLayerInkColor(spec.source, sampleLayerInkColor(hostDoc, sourceSampleLayer));
       }
 
       var pngFile = new File(folder.fsName + "/" + spec.png);
@@ -880,13 +1312,40 @@ app.bringToFront();
       }
 
       hostDoc.selection.deselect();
+      log("  PNG: " + pngFile.fsName);
 
-      // Build selection aligned to correct pixel coords
-      if(!selectionFromTrapPngIntoHost_ALIGN_BY_BOUNDS(hostDoc, pngFile)){
+      var gotTrapSelection = false;
+      try{
+        gotTrapSelection = selectionFromTrapPngIntoHost_ALIGN_BY_BOUNDS(hostDoc, pngFile, spec);
+        log("  selectionFromTrapPngIntoHost_ALIGN_BY_BOUNDS=" + gotTrapSelection);
+      }catch(eSelBuild){
+        log("  ERROR building selection from PNG: " + eSelBuild);
+        hostDoc.selection.deselect();
+        skippedSel++;
+        continue;
+      }
+
+      if(!gotTrapSelection){
         log("  SKIP: could not load selection from trap PNG");
         hostDoc.selection.deselect();
         skippedSel++;
         continue;
+      }
+
+      if(!hasSelection(hostDoc)){
+        log("  SKIP: selection builder returned true but host selection is empty");
+        hostDoc.selection.deselect();
+        skippedSel++;
+        continue;
+      }
+
+      try{
+        var sb = hostDoc.selection.bounds;
+        log("  trap selection bounds px: " +
+          sb[0].as("px") + "," + sb[1].as("px") + "," +
+          sb[2].as("px") + "," + sb[3].as("px"));
+      }catch(eBounds){
+        log("  ERROR reading trap selection bounds: " + eBounds);
       }
 
       var trapName = "TRAP__" + sanitizeName(spec.source) + "_over_" + sanitizeName(spec.target);
@@ -894,11 +1353,40 @@ app.bringToFront();
       applySourceAppearanceToTrap(trapLayer, sourceBase);
 
       hostDoc.activeLayer = trapLayer;
-      hostDoc.selection.fill(app.foregroundColor, ColorBlendMode.NORMAL, 100, false);
-      hostDoc.selection.deselect();
 
-      imported++;
-      log("  OK Imported: " + trapName + " (in " + sourceGroup.name + ")");
+      try{
+        ensureCompositeChannels(hostDoc);
+        log("  fill fg color on " + trapName);
+        fillSelectionWithLayerColor(spec.source);
+        hostDoc.selection.deselect();
+        imported++;
+        log("  OK Imported: " + trapName + " (in " + sourceGroup.name + ")");
+      }catch(eFill){
+        log("  FILL ERROR on " + trapName + ": " + eFill);
+
+        try{
+          if(hasSelection(hostDoc)){
+            var fb = hostDoc.selection.bounds;
+            log("  fill-error selection bounds px: " +
+              fb[0].as("px") + "," + fb[1].as("px") + "," +
+              fb[2].as("px") + "," + fb[3].as("px"));
+          }else{
+            log("  fill-error: selection is empty");
+          }
+        }catch(eFillBounds){
+          log("  fill-error bounds read failed: " + eFillBounds);
+        }
+
+        try{
+          trapLayer.remove();
+          log("  removed failed trap layer: " + trapName);
+        }catch(eRemoveTrap){
+          log("  could not remove failed trap layer: " + eRemoveTrap);
+        }
+
+        hostDoc.selection.deselect();
+        throw eFill;
+      }
     }
 
     log("=== SUMMARY ===");
@@ -917,7 +1405,7 @@ app.bringToFront();
     log("FATAL: " + eTop);
     if(folder) flushLog(folder);
     else flushLog(null);
-    alert("Import failed:\n" + eTop + "\n\nA debug log was written (job folder or Desktop fallback).");
+    alert("Import failed:\n" + eTop + "\n\nCheck import_debug_log.txt for the last STEP FAIL line.");
   } finally {
     try { app.displayDialogs = prevDialogs; } catch(e3) {}
   }

@@ -65,6 +65,75 @@ app.bringToFront();
     for (var i=0;i<doc.layers.length;i++){ try{ doc.layers[i].visible = snap[i]; }catch(e){} }
   }
 
+  function savePngFast(doc, fileObj){
+    var opts = new PNGSaveOptions();
+    opts.interlaced = false;
+    doc.saveAs(fileObj, opts, true, Extension.LOWERCASE);
+  }
+
+  function duplicateSelectionToAlpha(doc, alphaName){
+    var ch = doc.channels.add();
+    ch.name = alphaName;
+    doc.selection.store(ch);
+    return ch;
+  }
+
+  function findAlphaByName(doc, alphaName){
+    for(var i=0;i<doc.channels.length;i++){
+      if(doc.channels[i].name === alphaName) return doc.channels[i];
+    }
+    return null;
+  }
+
+  function thresholdActiveChannel(level){
+    var d = new ActionDescriptor();
+    d.putInteger(cTID("Lvl "), level);
+    executeAction(cTID("Thrs"), d, DialogModes.NO);
+  }
+
+  function selectChannelByName(doc, name){
+    app.activeDocument = doc;
+    var d = new ActionDescriptor();
+    var r = new ActionReference();
+    r.putName(cTID("Chnl"), name);
+    d.putReference(cTID("null"), r);
+    d.putBoolean(cTID("MkVs"), false);
+    executeAction(cTID("slct"), d, DialogModes.NO);
+  }
+
+  function restoreCompositeChannels(doc){
+    try { doc.activeChannels = doc.componentChannels; } catch(e){}
+  }
+
+  function applyCleanupToSelection(doc, alphaThreshold, edgeBiasPx){
+    var tmp = null;
+    try{
+      if(!hasSelection(doc)) return false;
+
+      tmp = doc.channels.add();
+      tmp.name = "__TMP_EXPORT_CLEAN__";
+      doc.selection.store(tmp);
+      doc.selection.deselect();
+
+      selectChannelByName(doc, tmp.name);
+      thresholdActiveChannel(alphaThreshold);
+      restoreCompositeChannels(doc);
+
+      doc.selection.load(tmp, SelectionType.REPLACE);
+
+      if(edgeBiasPx > 0){
+        try { doc.selection.expand(edgeBiasPx); } catch(e0){}
+      } else if(edgeBiasPx < 0){
+        try { doc.selection.contract(Math.abs(edgeBiasPx)); } catch(e1){}
+      }
+
+      return hasSelection(doc);
+    } finally {
+      try { if(tmp) tmp.remove(); } catch(e2){}
+      try { restoreCompositeChannels(doc); } catch(e3){}
+    }
+  }
+
   function layerMeta(L){
     var bm="(unknown)", op=100, fop=100;
     try { bm = L.blendMode.toString(); } catch(e){}
@@ -73,60 +142,90 @@ app.bringToFront();
     return { blendMode: bm, opacity: op, fillOpacity: fop };
   }
 
-  function exportLayerMaskPNG(doc, layer, label, masksFolder){
+  function exportLayerMaskPNG(doc, layer, label, masksFolder, applyCleanup){
     var snap = snapshotTopVisibility(doc);
+    var oldDoc = app.activeDocument;
+    var oldRuler = app.preferences.rulerUnits;
+    var srcAlpha = null;
+    var maskDoc = null;
+    var tmpAlpha = null;
+    var alphaThreshold = Number($.global.PHASE2_ALPHA_THRESHOLD);
+    var edgeBiasPx = Number($.global.PHASE2_EDGE_BIAS_PX);
 
-    for (var i=0;i<doc.layers.length;i++){ try{ doc.layers[i].visible = false; }catch(e){} }
-    layer.visible = true;
-    doc.activeLayer = layer;
+    try{
+      app.preferences.rulerUnits = Units.PIXELS;
+      app.activeDocument = doc;
 
-    if(!selectLayerShapeBestEffort(doc)){
-      restoreTopVisibility(doc, snap);
-      return null;
+      for (var i=0;i<doc.layers.length;i++){ try{ doc.layers[i].visible = false; }catch(e){} }
+      layer.visible = true;
+      doc.activeLayer = layer;
+
+      if(!selectLayerShapeBestEffort(doc)){
+        return null;
+      }
+
+      if(applyCleanup){
+        if(isNaN(alphaThreshold)) alphaThreshold = 8;
+        if(isNaN(edgeBiasPx)) edgeBiasPx = 0;
+        if(!applyCleanupToSelection(doc, alphaThreshold, edgeBiasPx)){
+          return null;
+        }
+      }
+
+      srcAlpha = duplicateSelectionToAlpha(doc, "__TMP_EXPORT_MASK__");
+
+      maskDoc = app.documents.add(
+        doc.width,
+        doc.height,
+        doc.resolution,
+        "mask_tmp",
+        NewDocumentMode.RGB,
+        DocumentFill.TRANSPARENT,
+        1.0,
+        BitsPerChannelType.EIGHT
+      );
+
+      app.activeDocument = doc;
+      srcAlpha.duplicate(maskDoc, ElementPlacement.PLACEATEND);
+
+      app.activeDocument = maskDoc;
+      tmpAlpha = findAlphaByName(maskDoc, "__TMP_EXPORT_MASK__");
+      if(!tmpAlpha) throw new Error("exportLayerMaskPNG: duplicated alpha missing in temp doc");
+
+      maskDoc.selection.deselect();
+      maskDoc.selection.load(tmpAlpha, SelectionType.REPLACE);
+
+      var trapLayer = maskDoc.artLayers.add();
+      trapLayer.name = "MASK";
+      maskDoc.activeLayer = trapLayer;
+
+      var white = new SolidColor();
+      white.rgb.red = 255;
+      white.rgb.green = 255;
+      white.rgb.blue = 255;
+
+      maskDoc.selection.fill(white, ColorBlendMode.NORMAL, 100, false);
+      maskDoc.selection.deselect();
+
+      try { tmpAlpha.remove(); } catch(e0){}
+
+      var fileName = label + "_" + sanitize(layer.name) + ".png";
+      var outFile = new File(masksFolder.fsName + "/" + fileName);
+      savePngFast(maskDoc, outFile);
+
+      return fileName;
+    } finally {
+      try{
+        if(maskDoc) maskDoc.close(SaveOptions.DONOTSAVECHANGES);
+      }catch(e1){}
+      try{
+        app.activeDocument = doc;
+        if(srcAlpha) srcAlpha.remove();
+      }catch(e2){}
+      try { restoreTopVisibility(doc, snap); } catch(e3){}
+      try { app.activeDocument = oldDoc; } catch(e4){}
+      try { app.preferences.rulerUnits = oldRuler; } catch(e5){}
     }
-
-    var tmp = doc.artLayers.add();
-    tmp.name = "__TMP_MASK_FILL__";
-    app.foregroundColor.rgb.red = 255;
-    app.foregroundColor.rgb.green = 255;
-    app.foregroundColor.rgb.blue = 255;
-    doc.activeLayer = tmp;
-    doc.selection.fill(app.foregroundColor, ColorBlendMode.NORMAL, 100, false);
-    doc.selection.deselect();
-
-    var srcL = tmp.bounds[0].as("px");
-    var srcT = tmp.bounds[1].as("px");
-
-    doc.activeLayer = tmp;
-    doc.selection.selectAll();
-    doc.selection.copy();
-    tmp.remove();
-
-    var maskDoc = app.documents.add(doc.width, doc.height, doc.resolution, "mask_tmp",
-                                    NewDocumentMode.RGB, DocumentFill.TRANSPARENT);
-    app.activeDocument = maskDoc;
-    maskDoc.paste();
-
-    var pasted = maskDoc.activeLayer;
-    var dstL = pasted.bounds[0].as("px");
-    var dstT = pasted.bounds[1].as("px");
-
-    pasted.translate(srcL - dstL, srcT - dstT);
-
-    var fileName = label + "_" + sanitize(layer.name) + ".png";
-    var outFile = new File(masksFolder.fsName + "/" + fileName);
-
-    var opts = new PNGSaveOptions();
-    opts.compression = 9;
-    opts.interlaced = false;
-
-    maskDoc.saveAs(outFile, opts, true, Extension.LOWERCASE);
-    maskDoc.close(SaveOptions.DONOTSAVECHANGES);
-
-    app.activeDocument = doc;
-    restoreTopVisibility(doc, snap);
-
-    return fileName;
   }
 
   try {
@@ -173,7 +272,9 @@ if (!exportFolder.exists) exportFolder.create();
     };
 
     var km = layerMeta(keyLayer);
-    var keyMask = exportLayerMaskPNG(doc, keyLayer, "KEY", masksFolder);
+    var doClean = ($.global.PHASE2_DO_CLEAN === true);
+
+    var keyMask = exportLayerMaskPNG(doc, keyLayer, "KEY", masksFolder, false);
     job.files.push({
       kind:"KEY",
       name:keyLayer.name,
@@ -186,7 +287,7 @@ if (!exportFolder.exists) exportFolder.create();
     for (var c = 0; c < colorLayers.length; c++) {
       var layer = colorLayers[c];
       var m = layerMeta(layer);
-      var mask = exportLayerMaskPNG(doc, layer, (c + 1), masksFolder);
+      var mask = exportLayerMaskPNG(doc, layer, (c + 1), masksFolder, doClean);
 
       job.colors.push({
         name: layer.name,

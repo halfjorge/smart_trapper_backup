@@ -46,6 +46,48 @@ app.bringToFront();
     $.global.PHASE2_MODE = okPlates ? "plates" : "overprint";
   }
 
+  $.global.PHASE2_DO_CLEAN = false;
+  $.global.PHASE2_ALPHA_THRESHOLD = 8;
+  $.global.PHASE2_EDGE_BIAS_PX = 0;
+
+  function configurePreflightCleanupForPipeline(){
+    var doClean = confirm("Plate cleanup before export/trapping?\n\nYes = clean fuzzy edges first\nNo = use original masks");
+    if(doClean === null || typeof doClean === "undefined") return false;
+    if(!doClean){
+      $.global.PHASE2_DO_CLEAN = false;
+      return true;
+    }
+
+    alert(
+      "Preflight cleanup settings\n\n" +
+      "Alpha threshold: higher removes more faint/fuzzy pixels.\n" +
+      "Edge bias: positive expands, negative contracts, zero keeps size."
+    );
+
+    var alphaInput = prompt("Alpha threshold (0-255). Higher = stronger cleanup.", String($.global.PHASE2_ALPHA_THRESHOLD));
+    if(alphaInput === null) return false;
+    var alphaValue = parseInt(String(alphaInput), 10);
+    if(isNaN(alphaValue) || alphaValue < 0 || alphaValue > 255){
+      alert("Alpha threshold must be a whole number from 0 to 255.");
+      return false;
+    }
+
+    var edgeInput = prompt("Edge bias in pixels. Positive expands, negative contracts.", String($.global.PHASE2_EDGE_BIAS_PX));
+    if(edgeInput === null) return false;
+    var edgeValue = parseInt(String(edgeInput), 10);
+    if(isNaN(edgeValue)){
+      alert("Edge bias must be a whole number in pixels.");
+      return false;
+    }
+
+    $.global.PHASE2_DO_CLEAN = true;
+    $.global.PHASE2_ALPHA_THRESHOLD = alphaValue;
+    $.global.PHASE2_EDGE_BIAS_PX = edgeValue;
+    return true;
+  }
+
+  if (!configurePreflightCleanupForPipeline()) return;
+
   // ===============================
   // 1) RUN EXPORT
   // ===============================
