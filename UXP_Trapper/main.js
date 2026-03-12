@@ -709,6 +709,76 @@ function createController(rootNode) {
     return await getTargetLayerBoundsPx();
   }
 
+  async function alignTargetToReferenceBounds(referenceBounds, labelPrefix) {
+    const label = String(labelPrefix || "align");
+    let note = label + ": skipped";
+    if (!referenceBounds || referenceBounds.width <= 0 || referenceBounds.height <= 0) {
+      return { note, aligned: false, placedAfter: null };
+    }
+
+    let placedBefore = await getTargetLayerBoundsPx();
+    if (!placedBefore || placedBefore.width <= 0 || placedBefore.height <= 0) {
+      return { note: label + ": no target bounds", aligned: false, placedAfter: null };
+    }
+
+    const widthRatio = referenceBounds.width / placedBefore.width;
+    const heightRatio = referenceBounds.height / placedBefore.height;
+    const ratioDelta = Math.max(Math.abs(widthRatio - 1), Math.abs(heightRatio - 1));
+    const refCx = (referenceBounds.left + referenceBounds.right) / 2;
+    const refCy = (referenceBounds.top + referenceBounds.bottom) / 2;
+    const dstCx = (placedBefore.left + placedBefore.right) / 2;
+    const dstCy = (placedBefore.top + placedBefore.bottom) / 2;
+    const centerDx0 = refCx - dstCx;
+    const centerDy0 = refCy - dstCy;
+    const centerDist = Math.max(Math.abs(centerDx0), Math.abs(centerDy0));
+    const shouldScale = ratioDelta > 0.15;
+    const shouldMove = centerDist > 10;
+    let aligned = false;
+
+    note =
+      label +
+      " ref=[" + fmtBounds(referenceBounds) + "]" +
+      " dstBefore=[" + fmtBounds(placedBefore) + "]" +
+      " ratioDelta=" + ratioDelta.toFixed(4) +
+      " centerDx=" + centerDx0.toFixed(2) +
+      " centerDy=" + centerDy0.toFixed(2);
+
+    if (shouldScale) {
+      const scalePct = ((widthRatio + heightRatio) / 2) * 100;
+      const scaleResult = await scaleTargetLayerPercent(scalePct, "Align Placed Layer Scale");
+      if (!batchPlayResultHasError(scaleResult)) {
+        aligned = true;
+        note += " | scaleFix=" + scalePct.toFixed(4) + "%";
+        placedBefore = await getTargetLayerBoundsPx();
+      } else {
+        note += " | scaleFixFailed";
+      }
+    }
+
+    if (shouldMove || shouldScale) {
+      const current = placedBefore || (await getTargetLayerBoundsPx());
+      if (current) {
+        const curCx = (current.left + current.right) / 2;
+        const curCy = (current.top + current.bottom) / 2;
+        const moveDx = refCx - curCx;
+        const moveDy = refCy - curCy;
+        if (Math.abs(moveDx) > 0.5 || Math.abs(moveDy) > 0.5) {
+          const moveResult = await translateTargetLayerPixels(moveDx, moveDy, "Align Placed Layer Offset");
+          if (!batchPlayResultHasError(moveResult)) {
+            aligned = true;
+            const placedAfter = await getTargetLayerBoundsPx();
+            note += " | moveFix=(" + moveDx.toFixed(2) + "," + moveDy.toFixed(2) + ")";
+            note += " | dstAfter=[" + fmtBounds(placedAfter) + "]";
+            return { note, aligned, placedAfter };
+          }
+          note += " | moveFixFailed";
+        }
+      }
+    }
+
+    return { note, aligned, placedAfter: await getTargetLayerBoundsPx() };
+  }
+
   function fmtBounds(bounds) {
     if (!bounds) return "(none)";
     return (
@@ -1918,6 +1988,10 @@ function createController(rootNode) {
         if (!groupId) {
           throw new Error("Missing destination group ID for " + group.name);
         }
+        const sourceBaseId = sourceBase ? layerIdOf(sourceBase) : 0;
+        const sourceBaseBounds = sourceBaseId
+          ? (await getLayerBoundsById(sourceBaseId, "Get Source Base Bounds For Trap Align"))
+          : null;
 
         appendStatus("Importing " + trapLayerName + "\n  png: " + spec.png + "\n  group: " + group.name);
         const selectResult = await selectLayerById(groupId, "Select Destination Group");
@@ -1938,6 +2012,12 @@ function createController(rootNode) {
         if (batchPlayResultHasError(renameResult)) {
           throw new Error("rename reported error\n" + summarizeBatchPlayResult(renameResult));
         }
+        if (sourceBaseBounds) {
+          const trapAlign = await alignTargetToReferenceBounds(sourceBaseBounds, "trapAlign");
+          appendStatus("  trap alignment: " + trapAlign.note);
+        } else {
+          appendStatus("  trap alignment: skipped (no source base bounds)");
+        }
 
         let originalPlacedId = 0;
         try {
@@ -1957,7 +2037,6 @@ function createController(rootNode) {
               throw new Error("transparency selection reported error\n" + summarizeBatchPlayResult(selectTransparency));
             }
 
-            const sourceBaseId = layerIdOf(sourceBase);
             if (!sourceBaseId) {
               throw new Error("Missing source base layer ID for " + sourceBase.name);
             }
