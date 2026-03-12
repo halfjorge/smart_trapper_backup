@@ -916,6 +916,16 @@ function createController(rootNode) {
 
     const cleanFileName = "clean_masks/CLEAN__" + sanitize(sourceName) + ".png";
     const cleanPngEntry = await getEntryByRelativePath(currentJobFolderEntry, cleanFileName);
+    const cleanPngDpi = await getPngDpi(cleanPngEntry);
+    let docRes = 0;
+    let docWidth = 0;
+    let docHeight = 0;
+    try {
+      const d = app.activeDocument;
+      docRes = Number(d.resolution || 0);
+      docWidth = Number((d.width && d.width.value) || d.width || 0);
+      docHeight = Number((d.height && d.height.value) || d.height || 0);
+    } catch (e) {}
     const sourceColor = maskColors[sourceName] || null;
     if (!sourceColor) {
       return { ok: false, message: "No source color metadata for " + sourceName };
@@ -1051,7 +1061,16 @@ function createController(rootNode) {
       ok: true,
       cleanName,
       color: sourceColor,
-      placementFixNote
+      placementFixNote,
+      placementDebug: [
+        "source=" + sourceName,
+        "cleanPng=" + cleanFileName,
+        "pngDpi=" + (cleanPngDpi ? cleanPngDpi.toFixed(4) : "missing"),
+        "docRes=" + (docRes ? docRes.toFixed(4) : "unknown"),
+        "docSize=" + docWidth + "x" + docHeight,
+        "sourceBounds=[" + fmtBounds(sourceBounds) + "]",
+        "placement=" + placementFixNote
+      ].join(" | ")
     };
   }
 
@@ -2091,6 +2110,29 @@ function createController(rootNode) {
     lines.push(statusStamp("Prepare Import Structure"));
     lines.push("");
     lines.push("Preparing import structure...");
+    try {
+      const settings = getSettings();
+      lines.push(
+        "Settings: preflightCleanup=" + (!!settings.preflightCleanup) +
+        ", alphaThreshold=" + settings.alphaThreshold +
+        ", edgeBiasPx=" + settings.edgeBiasPx +
+        ", trapPx=" + settings.trapPx +
+        ", mode=" + settings.mode
+      );
+    } catch (e) {
+      lines.push("Settings: (unavailable) " + String(e));
+    }
+    try {
+      lines.push(
+        "Document: " + doc.title +
+        " | mode=" + String(doc.mode) +
+        " | res=" + Number(doc.resolution || 0).toFixed(4) +
+        " | size=" + Number((doc.width && doc.width.value) || doc.width || 0) +
+        "x" + Number((doc.height && doc.height.value) || doc.height || 0)
+      );
+    } catch (e) {
+      lines.push("Document summary unavailable: " + String(e));
+    }
     lines.push("Top-level layer inspection:");
     setStatus(lines.join("\n"));
 
@@ -2179,6 +2221,9 @@ function createController(rootNode) {
                 "  CLEAN " + sourceName + " -> " + cleanResult.cleanName +
                 " RGB(" + cleanResult.color.r + "," + cleanResult.color.g + "," + cleanResult.color.b + ")"
               );
+              if (cleanResult.placementDebug) {
+                lines.push("    debug: " + cleanResult.placementDebug);
+              }
             } else {
               cleanSkipped += 1;
               lines.push("  CLEAN skip " + sourceName + ": " + ((cleanResult && cleanResult.message) || "unknown"));
