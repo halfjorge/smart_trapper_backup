@@ -44,3 +44,6 @@ job.json
 **/traps/
 **/traps.json
 **/*log*.txt
+
+# UXP runtime outputs
+UXP_Trapper/*_last_run.json
