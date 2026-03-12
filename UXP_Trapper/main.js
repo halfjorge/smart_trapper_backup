@@ -3,6 +3,7 @@ const { app, core, constants, action } = require("photoshop");
 const { localFileSystem, formats } = require("uxp").storage;
 
 const STORAGE_KEY = "smartTrapperSettings";
+const EXPORT_ENGINE_VERSION = "dom-save-v4-rgb-convert-debug";
 const DEFAULT_JOB_FOLDER = "C:\\Users\\Valued Customer\\Desktop\\TrapJobs";
 const DEFAULT_LOG_FOLDER = "C:\\Users\\Valued Customer\\Desktop\\trapper\\UXP_Trapper\\status_logs";
 
@@ -574,9 +575,155 @@ function createController(rootNode) {
     return current;
   }
 
+  function toUint8Array(data) {
+    if (!data) return null;
+    if (data instanceof Uint8Array) return data;
+    if (data instanceof ArrayBuffer) return new Uint8Array(data);
+    if (data.buffer instanceof ArrayBuffer) return new Uint8Array(data.buffer);
+    return null;
+  }
+
+  function parsePngDpiFromBytes(bytes) {
+    if (!bytes || bytes.length < 8) return null;
+    const sig = [137, 80, 78, 71, 13, 10, 26, 10];
+    for (let i = 0; i < sig.length; i += 1) {
+      if (bytes[i] !== sig[i]) return null;
+    }
+
+    let offset = 8;
+    while (offset + 12 <= bytes.length) {
+      const len =
+        ((bytes[offset] << 24) >>> 0) +
+        ((bytes[offset + 1] << 16) >>> 0) +
+        ((bytes[offset + 2] << 8) >>> 0) +
+        (bytes[offset + 3] >>> 0);
+      const type = String.fromCharCode(
+        bytes[offset + 4],
+        bytes[offset + 5],
+        bytes[offset + 6],
+        bytes[offset + 7]
+      );
+      const dataStart = offset + 8;
+      if (type === "pHYs" && len >= 9 && dataStart + len <= bytes.length) {
+        const ppux =
+          ((bytes[dataStart] << 24) >>> 0) +
+          ((bytes[dataStart + 1] << 16) >>> 0) +
+          ((bytes[dataStart + 2] << 8) >>> 0) +
+          (bytes[dataStart + 3] >>> 0);
+        const unit = bytes[dataStart + 8];
+        if (unit === 1 && ppux > 0) {
+          return ppux * 0.0254;
+        }
+      }
+      offset = dataStart + len + 4;
+    }
+    return null;
+  }
+
+  async function getPngDpi(fileEntry) {
+    try {
+      const raw = await fileEntry.read({ format: formats.binary });
+      const bytes = toUint8Array(raw);
+      return parsePngDpiFromBytes(bytes);
+    } catch (e) {
+      return null;
+    }
+  }
+
+  async function scaleTargetLayerPercent(scalePercent, commandName) {
+    const pct = Number(scalePercent || 100);
+    return await core.executeAsModal(async () => {
+      return await action.batchPlay(
+        [{
+          _obj: "transform",
+          _target: [{ _ref: "layer", _enum: "ordinal", _value: "targetEnum" }],
+          freeTransformCenterState: { _enum: "quadCenterState", _value: "QCSAverage" },
+          offset: {
+            _obj: "offset",
+            horizontal: { _unit: "pixelsUnit", _value: 0 },
+            vertical: { _unit: "pixelsUnit", _value: 0 }
+          },
+          width: { _unit: "percentUnit", _value: pct },
+          height: { _unit: "percentUnit", _value: pct },
+          linked: true,
+          _options: { dialogOptions: "dontDisplay" }
+        }],
+        {}
+      );
+    }, { commandName: commandName || "Scale Placed Layer" });
+  }
+
+  async function translateTargetLayerPixels(dx, dy, commandName) {
+    const deltaX = Number(dx || 0);
+    const deltaY = Number(dy || 0);
+    return await core.executeAsModal(async () => {
+      return await action.batchPlay(
+        [{
+          _obj: "move",
+          _target: [{ _ref: "layer", _enum: "ordinal", _value: "targetEnum" }],
+          to: {
+            _obj: "offset",
+            horizontal: { _unit: "pixelsUnit", _value: deltaX },
+            vertical: { _unit: "pixelsUnit", _value: deltaY }
+          },
+          _options: { dialogOptions: "dontDisplay" }
+        }],
+        {}
+      );
+    }, { commandName: commandName || "Translate Target Layer" });
+  }
+
+  async function getTargetLayerBoundsPx() {
+    const result = await core.executeAsModal(async () => {
+      return await action.batchPlay(
+        [{
+          _obj: "get",
+          _target: [{ _ref: "layer", _enum: "ordinal", _value: "targetEnum" }],
+          _options: { dialogOptions: "dontDisplay" }
+        }],
+        {}
+      );
+    }, { commandName: "Get Target Layer Bounds" });
+
+    const desc = (result && result[0]) || {};
+    const b = desc.boundsNoEffects || desc.bounds || null;
+    if (!b) return null;
+    const left = Number((b.left && b.left._value) || b.left || 0);
+    const top = Number((b.top && b.top._value) || b.top || 0);
+    const right = Number((b.right && b.right._value) || b.right || 0);
+    const bottom = Number((b.bottom && b.bottom._value) || b.bottom || 0);
+    return {
+      left,
+      top,
+      right,
+      bottom,
+      width: Math.max(0, right - left),
+      height: Math.max(0, bottom - top)
+    };
+  }
+
+  async function getLayerBoundsById(layerId, commandName) {
+    if (!layerId) return null;
+    const sel = await selectLayerById(layerId, commandName || "Select Layer For Bounds");
+    if (batchPlayResultHasError(sel)) return null;
+    return await getTargetLayerBoundsPx();
+  }
+
+  function fmtBounds(bounds) {
+    if (!bounds) return "(none)";
+    return (
+      "L=" + bounds.left.toFixed(2) +
+      " T=" + bounds.top.toFixed(2) +
+      " R=" + bounds.right.toFixed(2) +
+      " B=" + bounds.bottom.toFixed(2) +
+      " W=" + bounds.width.toFixed(2) +
+      " H=" + bounds.height.toFixed(2)
+    );
+  }
+
   async function placeTrapPngIntoDocument(fileEntry) {
     const token = localFileSystem.createSessionToken(fileEntry);
-    return await core.executeAsModal(async () => {
+    const placeResult = await core.executeAsModal(async () => {
       return await action.batchPlay(
         [{
           _obj: "placeEvent",
@@ -590,6 +737,10 @@ function createController(rootNode) {
         {}
       );
     }, { commandName: "Import Trap PNG" });
+
+    appendStatus("  place normalization: disabled (native placeEvent coordinates)");
+
+    return placeResult;
   }
 
   async function renameTargetLayer(newName) {
@@ -713,20 +864,49 @@ function createController(rootNode) {
 
   async function setLayerVisibilityById(layerId, visible, commandName) {
     if (!layerId) throw new Error("Missing layer ID for visibility set");
+    const wantVisible = !!visible;
     return await core.executeAsModal(async () => {
       return await action.batchPlay(
         [{
-          _obj: "set",
+          _obj: wantVisible ? "show" : "hide",
           _target: [{ _ref: "layer", _id: layerId }],
-          to: {
-            _obj: "layer",
-            visible: !!visible
-          },
           _options: { dialogOptions: "dontDisplay" }
         }],
         {}
       );
-    }, { commandName: commandName || "Set Layer Visibility" });
+    }, { commandName: commandName || (wantVisible ? "Show Layer" : "Hide Layer") });
+  }
+
+  async function hideOriginalLayersWhenCleanExists(doc) {
+    const layers = flattenTopLevelLayers(doc);
+    let hidden = 0;
+    let failed = 0;
+    let checkedGroups = 0;
+    const details = [];
+    for (let i = 0; i < layers.length; i += 1) {
+      const group = layers[i];
+      if (!group || !isGroupLikeLayer(group)) continue;
+      if (String(group.name || "").indexOf("COLOR__") !== 0) continue;
+      checkedGroups += 1;
+
+      const logicalName = String(group.name || "").substring(7);
+      const cleanName = "CLEAN__" + logicalName;
+      const cleanLayer = findArtLayerByNameInfo(group, cleanName);
+      const originalLayer = findArtLayerByNameInfo(group, logicalName);
+      if (!cleanLayer || !originalLayer || cleanLayer.__descriptor || originalLayer.__descriptor) continue;
+
+      const originalId = layerIdOf(originalLayer);
+      if (!originalId) continue;
+      try {
+        await setLayerVisibilityById(originalId, false, "Hide Original Layer After CLEAN Sync");
+        hidden += 1;
+        details.push("  hidden: " + originalLayer.name + " (group " + group.name + ")");
+      } catch (e) {
+        failed += 1;
+        details.push("  hide failed: " + originalLayer.name + " (group " + group.name + ") :: " + String(e));
+      }
+    }
+    return { checkedGroups, hidden, failed, details };
   }
 
   async function buildCleanLayerInGroup(group, sourceName, maskColors) {
@@ -761,6 +941,7 @@ function createController(rootNode) {
     if (!originalLayerId) {
       return { ok: false, message: "Missing original source layer ID for " + sourceName };
     }
+    const sourceBounds = await getLayerBoundsById(originalLayerId, "Get Source Bounds For CLEAN");
 
     const placeResult = await placeTrapPngIntoDocument(cleanPngEntry);
     if (batchPlayResultHasError(placeResult)) {
@@ -778,6 +959,60 @@ function createController(rootNode) {
     const renameResult = await renameTargetLayer(cleanName + "__PLACED_TMP");
     if (batchPlayResultHasError(renameResult)) {
       return { ok: false, message: "Clean temp rename failed\n" + summarizeBatchPlayResult(renameResult) };
+    }
+
+    let placedBoundsBefore = await getTargetLayerBoundsPx();
+    let placementFixNote = "placement check skipped";
+    if (sourceBounds && placedBoundsBefore && placedBoundsBefore.width > 0 && placedBoundsBefore.height > 0) {
+      const widthRatio = sourceBounds.width / placedBoundsBefore.width;
+      const heightRatio = sourceBounds.height / placedBoundsBefore.height;
+      const ratioDelta = Math.max(
+        Math.abs(widthRatio - 1),
+        Math.abs(heightRatio - 1)
+      );
+      const sourceCenterX = (sourceBounds.left + sourceBounds.right) / 2;
+      const sourceCenterY = (sourceBounds.top + sourceBounds.bottom) / 2;
+      const placedCenterX = (placedBoundsBefore.left + placedBoundsBefore.right) / 2;
+      const placedCenterY = (placedBoundsBefore.top + placedBoundsBefore.bottom) / 2;
+      const centerDx = sourceCenterX - placedCenterX;
+      const centerDy = sourceCenterY - placedCenterY;
+      const centerDist = Math.max(Math.abs(centerDx), Math.abs(centerDy));
+      const shouldFixScale = ratioDelta > 0.15;
+      const shouldFixShift = centerDist > 10;
+      placementFixNote =
+        "source=[" + fmtBounds(sourceBounds) + "] placedBefore=[" + fmtBounds(placedBoundsBefore) + "] " +
+        "ratioDelta=" + ratioDelta.toFixed(4) + " centerDx=" + centerDx.toFixed(2) + " centerDy=" + centerDy.toFixed(2);
+
+      if (shouldFixScale) {
+        const scalePct = ((widthRatio + heightRatio) / 2) * 100;
+        const scaleResult = await scaleTargetLayerPercent(scalePct, "Fix CLEAN Placed Scale");
+        if (!batchPlayResultHasError(scaleResult)) {
+          placedBoundsBefore = await getTargetLayerBoundsPx();
+          placementFixNote += " | scaleFix=" + scalePct.toFixed(4) + "%";
+        } else {
+          placementFixNote += " | scaleFixFailed";
+        }
+      }
+
+      if (shouldFixShift || shouldFixScale) {
+        const currentBounds = placedBoundsBefore || (await getTargetLayerBoundsPx());
+        if (currentBounds) {
+          const curCx = (currentBounds.left + currentBounds.right) / 2;
+          const curCy = (currentBounds.top + currentBounds.bottom) / 2;
+          const moveDx = sourceCenterX - curCx;
+          const moveDy = sourceCenterY - curCy;
+          if (Math.abs(moveDx) > 0.5 || Math.abs(moveDy) > 0.5) {
+            const moveResult = await translateTargetLayerPixels(moveDx, moveDy, "Fix CLEAN Placed Offset");
+            if (!batchPlayResultHasError(moveResult)) {
+              const placedAfter = await getTargetLayerBoundsPx();
+              placementFixNote += " | moveFix=(" + moveDx.toFixed(2) + "," + moveDy.toFixed(2) + ")";
+              placementFixNote += " | placedAfter=[" + fmtBounds(placedAfter) + "]";
+            } else {
+              placementFixNote += " | moveFixFailed";
+            }
+          }
+        }
+      }
     }
 
     const selectTransparency = await loadSelectionFromTargetTransparency();
@@ -815,7 +1050,8 @@ function createController(rootNode) {
     return {
       ok: true,
       cleanName,
-      color: sourceColor
+      color: sourceColor,
+      placementFixNote
     };
   }
 
@@ -1106,6 +1342,8 @@ function createController(rootNode) {
   }
 
   async function exportSingleMaskPng(sourceDoc, targetIndex, fileEntry) {
+    const outPath = (fileEntry && (fileEntry.nativePath || fileEntry.name)) || "(unknown)";
+    appendStatus("[mask-export] begin targetIndex=" + targetIndex + " file=" + outPath + " engine=" + EXPORT_ENGINE_VERSION);
     await core.executeAsModal(async () => {
       const duplicate = await sourceDoc.duplicate();
       let previousActive = null;
@@ -1120,12 +1358,40 @@ function createController(rootNode) {
         } catch (e) {}
 
         const dupLayers = flattenTopLevelLayers(duplicate);
+        appendStatus("[mask-export] duplicate doc created; layerCount=" + dupLayers.length);
+        try {
+          appendStatus("[mask-export] duplicate mode(before): " + String(duplicate.mode));
+        } catch (e) {}
         for (let i = 0; i < dupLayers.length; i += 1) {
           try {
             dupLayers[i].visible = i === targetIndex;
           } catch (e) {}
         }
+        appendStatus("[mask-export] isolated visibility applied at index=" + targetIndex);
 
+        // PNG export is reliable only when the temp export doc is RGB-compatible.
+        try {
+          const modeText = String(duplicate.mode || "");
+          if (modeText.indexOf("RGB") < 0) {
+            appendStatus("[mask-export] converting duplicate mode to RGB...");
+            await action.batchPlay(
+              [{
+                _obj: "convertMode",
+                to: { _class: "RGBColorMode" },
+                _options: { dialogOptions: "dontDisplay" }
+              }],
+              {}
+            );
+            appendStatus("[mask-export] convertMode to RGB returned");
+          }
+        } catch (modeErr) {
+          appendStatus("[mask-export] convertMode warning: " + String(modeErr));
+        }
+        try {
+          appendStatus("[mask-export] duplicate mode(after): " + String(duplicate.mode));
+        } catch (e) {}
+
+        appendStatus("[mask-export] DOM saveAs.png start");
         await duplicate.saveAs.png(
           fileEntry,
           {
@@ -1134,19 +1400,25 @@ function createController(rootNode) {
           },
           true
         );
+        appendStatus("[mask-export] DOM saveAs.png returned");
       } finally {
         try {
           if (previousActive) app.activeDocument = previousActive;
         } catch (e) {}
         try {
           await duplicate.closeWithoutSaving();
+          appendStatus("[mask-export] duplicate closed without saving");
         } catch (e) {
+          appendStatus("[mask-export] duplicate closeWithoutSaving error: " + String(e));
           try {
-            await duplicate.close(constants.SaveOptions.DONOTSAVECHANGES);
+            if (e && e.stack) {
+              appendStatus("[mask-export] duplicate close stack:\n" + String(e.stack));
+            }
           } catch (e2) {}
         }
       }
     }, { commandName: "Export Smart Trapper Mask" });
+    appendStatus("[mask-export] modal complete for " + outPath);
   }
 
   async function getFileByteLength(fileEntry) {
@@ -1778,6 +2050,19 @@ function createController(rootNode) {
       "Moved into destination groups: " + movedCount + "\n" +
       "Failed: " + failedCount
     );
+
+    try {
+      const cleanHide = await hideOriginalLayersWhenCleanExists(doc);
+      appendStatus(
+        "Post-import visibility cleanup:\n" +
+        "COLOR__ groups checked: " + cleanHide.checkedGroups + "\n" +
+        "Original layers hidden: " + cleanHide.hidden + "\n" +
+        "Hide failures: " + cleanHide.failed +
+        (cleanHide.details && cleanHide.details.length ? ("\n" + cleanHide.details.join("\n")) : "")
+      );
+    } catch (e) {
+      appendStatus("Post-import visibility cleanup warning:\n" + String(e));
+    }
   }
 
   async function prepareImportStructure() {
@@ -2155,11 +2440,12 @@ function createController(rootNode) {
     }
 
     const statusLines = [];
-    statusLines.push("Exporting masks to:");
-    statusLines.push(runFolder.nativePath || runFolder.name || "(selected)");
-    statusLines.push("");
-    statusLines.push("Export run start: " + new Date(runStartMs).toISOString());
-    setStatus(statusLines.join("\n"));
+      statusLines.push("Exporting masks to:");
+      statusLines.push(runFolder.nativePath || runFolder.name || "(selected)");
+      statusLines.push("");
+      statusLines.push("Export run start: " + new Date(runStartMs).toISOString());
+      statusLines.push("Export engine: " + EXPORT_ENGINE_VERSION);
+      setStatus(statusLines.join("\n"));
 
     for (const target of exportTargets) {
       const maskStartMs = nowMs();
@@ -2263,6 +2549,17 @@ function createController(rootNode) {
       const runStartMs = nowMs();
       appendStatus(statusStamp("Run Trapper"));
       appendStatus("Run start: " + new Date(runStartMs).toISOString());
+      appendStatus("Export engine: " + EXPORT_ENGINE_VERSION);
+      const bridgeBase = getSettings().bridgeUrl.replace(/\/$/, "");
+      try {
+        const healthStart = nowMs();
+        const healthResp = await fetch(bridgeBase + "/health");
+        const healthText = await healthResp.text();
+        appendStatus("Bridge health preflight ms = " + elapsedMs(healthStart));
+        appendStatus("Bridge health response:\n" + healthText);
+      } catch (healthErr) {
+        appendStatus("Bridge health preflight failed:\n" + String(healthErr));
+      }
       const exportPhaseStartMs = nowMs();
       const exported = await exportMasksToJobFolderForRun();
       appendStatus("Run phase timing: export+job-write ms = " + elapsedMs(exportPhaseStartMs));
@@ -2291,6 +2588,7 @@ function createController(rootNode) {
       });
       const text = await response.text();
       appendStatus("Run phase timing: bridge roundtrip ms = " + elapsedMs(bridgePhaseStartMs));
+      appendStatus("Bridge HTTP status: " + response.status + " " + response.statusText);
       appendStatus("Bridge run response:\n" + text);
 
       let parsed = null;
@@ -2339,6 +2637,9 @@ function createController(rootNode) {
       appendStatus("Run total ms: " + elapsedMs(runStartMs));
     } catch (e) {
       appendStatus("Run Trapper failed.\n" + String(e));
+      try {
+        if (e && e.stack) appendStatus("Run Trapper stack:\n" + String(e.stack));
+      } catch (e2) {}
     }
   }
 

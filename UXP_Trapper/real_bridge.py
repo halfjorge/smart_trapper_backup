@@ -6,7 +6,8 @@ import traceback
 import struct
 import zlib
 import time
-from datetime import datetime
+import uuid
+from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 
@@ -14,12 +15,31 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent
 TRAPPER_ROOT = ROOT.parent
 RUN_LOG = ROOT / "real_bridge_last_run.json"
+SERVICE_LOG = ROOT / "real_bridge_service.log"
 HOST = "127.0.0.1"
 PORT = 8765
+BRIDGE_STARTED_AT = time.time()
+BRIDGE_SESSION_ID = f"{int(BRIDGE_STARTED_AT)}-{uuid.uuid4().hex[:8]}"
+REQUEST_COUNT = 0
 
 
 def now_iso():
-    return datetime.utcnow().isoformat() + "Z"
+    return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+
+
+def append_service_log(event, payload=None):
+    row = {
+        "time": now_iso(),
+        "sessionId": BRIDGE_SESSION_ID,
+        "pid": os.getpid(),
+        "event": event,
+        "payload": payload or {}
+    }
+    try:
+        with SERVICE_LOG.open("a", encoding="utf-8") as fh:
+            fh.write(json.dumps(row, ensure_ascii=False) + "\n")
+    except Exception:
+        pass
 
 
 def default_engine_path():
@@ -47,6 +67,11 @@ def build_health_payload():
         "service": "smart-trapper-real-bridge",
         "version": "0.1.0",
         "timestamp": now_iso(),
+        "sessionId": BRIDGE_SESSION_ID,
+        "pid": os.getpid(),
+        "startedAt": datetime.fromtimestamp(BRIDGE_STARTED_AT, tz=timezone.utc).isoformat().replace("+00:00", "Z"),
+        "uptimeSec": round(max(0, time.time() - BRIDGE_STARTED_AT), 3),
+        "requestCount": REQUEST_COUNT,
         "enginePath": str(engine_path),
         "engineExists": engine_path.exists(),
         "trapperRoot": str(TRAPPER_ROOT)
@@ -186,7 +211,7 @@ def build_mask_color_map(job_folder, job_json_path):
     return out
 
 
-def run_engine(job_folder, trap_px):
+def run_engine(job_folder, trap_px, request_id=None):
     bridge_start = time.perf_counter()
     engine_path = default_engine_path()
     if not engine_path.exists():
@@ -215,6 +240,12 @@ def run_engine(job_folder, trap_px):
     bridge_log = job_folder / "trapper_bridge_log.txt"
     mask_color_file = job_folder / "mask_colors.json"
     cmd = [str(engine_path), str(job_folder), str(int(trap_px))]
+    engine_mtime = None
+    try:
+        if engine_path.exists():
+            engine_mtime = datetime.fromtimestamp(engine_path.stat().st_mtime, tz=timezone.utc).isoformat().replace("+00:00", "Z")
+    except Exception:
+        engine_mtime = None
 
     engine_start = time.perf_counter()
     completed = subprocess.run(
@@ -227,7 +258,11 @@ def run_engine(job_folder, trap_px):
 
     log_payload = {
         "ranAt": now_iso(),
+        "requestId": request_id,
+        "sessionId": BRIDGE_SESSION_ID,
+        "pid": os.getpid(),
         "command": cmd,
+        "engineMtimeUtc": engine_mtime,
         "returncode": completed.returncode,
         "engineMs": engine_ms,
         "stdout": completed.stdout,
@@ -262,6 +297,9 @@ def run_engine(job_folder, trap_px):
     return {
         "ok": completed.returncode == 0 and traps_json.exists(),
         "message": "Engine run complete" if completed.returncode == 0 else "Engine run failed",
+        "requestId": request_id,
+        "sessionId": BRIDGE_SESSION_ID,
+        "pid": os.getpid(),
         "jobFolder": str(job_folder),
         "enginePath": str(engine_path),
         "returncode": completed.returncode,
@@ -284,6 +322,7 @@ class Handler(BaseHTTPRequestHandler):
         json_response(self, 404, {"ok": False, "message": "Not found"})
 
     def do_POST(self):
+        global REQUEST_COUNT
         if self.path != "/run":
             json_response(self, 404, {"ok": False, "message": "Not found"})
             return
@@ -298,14 +337,23 @@ class Handler(BaseHTTPRequestHandler):
 
         snapshot = {
             "receivedAt": now_iso(),
+            "sessionId": BRIDGE_SESSION_ID,
+            "pid": os.getpid(),
             "payload": payload
         }
         write_run_snapshot(snapshot)
 
         try:
+            REQUEST_COUNT += 1
+            request_id = f"{int(time.time())}-{REQUEST_COUNT:06d}"
             settings = payload.get("settings", {}) or {}
             job_folder = settings.get("jobFolder") or payload.get("jobFolder")
             trap_px = settings.get("trapPx", 5)
+            append_service_log("run_requested", {
+                "requestId": request_id,
+                "jobFolder": job_folder,
+                "trapPx": trap_px
+            })
 
             if not job_folder or job_folder == "(none selected)":
                 json_response(self, 400, {
@@ -313,26 +361,47 @@ class Handler(BaseHTTPRequestHandler):
                     "message": "No job folder provided. Select an existing exported trap job folder in the panel first.",
                     "savedTo": str(RUN_LOG)
                 })
+                append_service_log("run_rejected_missing_job_folder", {"requestId": request_id})
                 return
 
-            result = run_engine(job_folder, trap_px)
+            result = run_engine(job_folder, trap_px, request_id=request_id)
             result["savedTo"] = str(RUN_LOG)
+            append_service_log("run_completed", {
+                "requestId": request_id,
+                "ok": bool(result.get("ok")),
+                "returncode": result.get("returncode"),
+                "engineMs": result.get("engineMs"),
+                "bridgeTotalMs": result.get("bridgeTotalMs")
+            })
             json_response(self, 200 if result.get("ok") else 500, result)
         except Exception as exc:
+            append_service_log("run_exception", {
+                "message": str(exc),
+                "traceback": traceback.format_exc()
+            })
             json_response(self, 500, {
                 "ok": False,
                 "message": str(exc),
                 "traceback": traceback.format_exc(),
+                "sessionId": BRIDGE_SESSION_ID,
+                "pid": os.getpid(),
                 "savedTo": str(RUN_LOG)
             })
 
 
 if __name__ == "__main__":
+    append_service_log("service_start", {
+        "host": HOST,
+        "port": PORT,
+        "trapperRoot": str(TRAPPER_ROOT),
+        "enginePath": str(default_engine_path())
+    })
     server = HTTPServer((HOST, PORT), Handler)
-    print(f"Smart Trapper real bridge listening on http://{HOST}:{PORT}")
+    print(f"Smart Trapper real bridge listening on http://{HOST}:{PORT} session={BRIDGE_SESSION_ID} pid={os.getpid()}")
     try:
         server.serve_forever()
     except KeyboardInterrupt:
         pass
     finally:
+        append_service_log("service_stop", {})
         server.server_close()
