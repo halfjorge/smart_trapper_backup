@@ -709,8 +709,11 @@ function createController(rootNode) {
     return await getTargetLayerBoundsPx();
   }
 
-  async function alignTargetToReferenceBounds(referenceBounds, labelPrefix) {
+  async function alignTargetToReferenceBounds(referenceBounds, labelPrefix, options) {
     const label = String(labelPrefix || "align");
+    const opts = options || {};
+    const allowScale = !!opts.allowScale;
+    const allowMove = (typeof opts.allowMove === "boolean") ? opts.allowMove : true;
     let note = label + ": skipped";
     if (!referenceBounds || referenceBounds.width <= 0 || referenceBounds.height <= 0) {
       return { note, aligned: false, placedAfter: null };
@@ -731,8 +734,8 @@ function createController(rootNode) {
     const centerDx0 = refCx - dstCx;
     const centerDy0 = refCy - dstCy;
     const centerDist = Math.max(Math.abs(centerDx0), Math.abs(centerDy0));
-    const shouldScale = ratioDelta > 0.15;
-    const shouldMove = centerDist > 10;
+    const shouldScale = allowScale && ratioDelta > 0.15;
+    const shouldMove = allowMove && centerDist > 10;
     let aligned = false;
 
     note =
@@ -2013,8 +2016,12 @@ function createController(rootNode) {
           throw new Error("rename reported error\n" + summarizeBatchPlayResult(renameResult));
         }
         if (sourceBaseBounds) {
-          const trapAlign = await alignTargetToReferenceBounds(sourceBaseBounds, "trapAlign");
-          appendStatus("  trap alignment: " + trapAlign.note);
+        const trapAlign = await alignTargetToReferenceBounds(
+          sourceBaseBounds,
+          "trapAlign",
+          { allowScale: false, allowMove: false }
+        );
+        appendStatus("  trap alignment: " + trapAlign.note);
         } else {
           appendStatus("  trap alignment: skipped (no source base bounds)");
         }
