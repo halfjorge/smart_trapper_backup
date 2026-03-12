@@ -982,7 +982,7 @@ function createController(rootNode) {
     return { checkedGroups, hidden, failed, details };
   }
 
-  async function buildCleanLayerInGroup(group, sourceName, maskColors) {
+  async function buildCleanLayerInGroup(group, sourceName, maskColors, placementOptions) {
     if (!currentJobFolderEntry) {
       return { ok: false, message: "No job folder selected for clean layer import" };
     }
@@ -1046,6 +1046,7 @@ function createController(rootNode) {
 
     let placedBoundsBefore = await getTargetLayerBoundsPx();
     let placementFixNote = "placement check skipped";
+    let observedOffset = null;
     if (sourceBounds && placedBoundsBefore && placedBoundsBefore.width > 0 && placedBoundsBefore.height > 0) {
       const widthRatio = sourceBounds.width / placedBoundsBefore.width;
       const heightRatio = sourceBounds.height / placedBoundsBefore.height;
@@ -1060,11 +1061,28 @@ function createController(rootNode) {
       const centerDx = sourceCenterX - placedCenterX;
       const centerDy = sourceCenterY - placedCenterY;
       const centerDist = Math.max(Math.abs(centerDx), Math.abs(centerDy));
-      const shouldFixScale = ratioDelta > 0.15;
+      const forcedOffset =
+        (placementOptions && placementOptions.forcedOffset)
+          ? {
+              dx: Number(placementOptions.forcedOffset.dx || 0),
+              dy: Number(placementOptions.forcedOffset.dy || 0)
+            }
+          : null;
+      const shouldFixScale = ratioDelta > 0.15 && !forcedOffset;
       const shouldFixShift = centerDist > 10;
       placementFixNote =
         "source=[" + fmtBounds(sourceBounds) + "] placedBefore=[" + fmtBounds(placedBoundsBefore) + "] " +
         "ratioDelta=" + ratioDelta.toFixed(4) + " centerDx=" + centerDx.toFixed(2) + " centerDy=" + centerDy.toFixed(2);
+
+      if (forcedOffset) {
+        observedOffset = { dx: forcedOffset.dx, dy: forcedOffset.dy };
+        placementFixNote +=
+          " | usingForcedOffset=(" +
+          observedOffset.dx.toFixed(2) + "," +
+          observedOffset.dy.toFixed(2) + ")";
+      } else if (ratioDelta <= 0.02) {
+        observedOffset = { dx: centerDx, dy: centerDy };
+      }
 
       if (shouldFixScale) {
         const scalePct = ((widthRatio + heightRatio) / 2) * 100;
@@ -1077,13 +1095,13 @@ function createController(rootNode) {
         }
       }
 
-      if (shouldFixShift || shouldFixScale) {
+      if (shouldFixShift || shouldFixScale || observedOffset) {
         const currentBounds = placedBoundsBefore || (await getTargetLayerBoundsPx());
         if (currentBounds) {
           const curCx = (currentBounds.left + currentBounds.right) / 2;
           const curCy = (currentBounds.top + currentBounds.bottom) / 2;
-          const moveDx = sourceCenterX - curCx;
-          const moveDy = sourceCenterY - curCy;
+          const moveDx = observedOffset ? observedOffset.dx : (sourceCenterX - curCx);
+          const moveDy = observedOffset ? observedOffset.dy : (sourceCenterY - curCy);
           if (Math.abs(moveDx) > 0.5 || Math.abs(moveDy) > 0.5) {
             const moveResult = await translateTargetLayerPixels(moveDx, moveDy, "Fix CLEAN Placed Offset");
             if (!batchPlayResultHasError(moveResult)) {
@@ -1134,6 +1152,7 @@ function createController(rootNode) {
       ok: true,
       cleanName,
       color: sourceColor,
+      observedOffset,
       placementFixNote,
       placementDebug: [
         "source=" + sourceName,
@@ -2276,6 +2295,7 @@ function createController(rootNode) {
       const maskColors = await readOptionalJsonFile(currentJobFolderEntry, "mask_colors.json") || {};
       let cleanBuilt = 0;
       let cleanSkipped = 0;
+      let cleanGlobalOffset = null;
       let cleanMasksReady = true;
       try {
         await currentJobFolderEntry.getEntry("clean_masks");
@@ -2300,8 +2320,24 @@ function createController(rootNode) {
           }
 
           try {
-            const cleanResult = await buildCleanLayerInGroup(maybeGroup, sourceName, maskColors);
+            const cleanResult = await buildCleanLayerInGroup(
+              maybeGroup,
+              sourceName,
+              maskColors,
+              { forcedOffset: cleanGlobalOffset }
+            );
             if (cleanResult && cleanResult.ok) {
+              if (!cleanGlobalOffset && cleanResult.observedOffset) {
+                cleanGlobalOffset = {
+                  dx: Number(cleanResult.observedOffset.dx || 0),
+                  dy: Number(cleanResult.observedOffset.dy || 0)
+                };
+                lines.push(
+                  "    captured clean global offset: (" +
+                  cleanGlobalOffset.dx.toFixed(2) + "," +
+                  cleanGlobalOffset.dy.toFixed(2) + ")"
+                );
+              }
               cleanBuilt += 1;
               lines.push(
                 "  CLEAN " + sourceName + " -> " + cleanResult.cleanName +
