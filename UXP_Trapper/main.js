@@ -133,6 +133,7 @@ function createController(rootNode) {
   let currentJobFolderEntry = null;
   let currentLogFolderEntry = null;
   let statusLog = "";
+  let cleanPlacementOffset = null;
 
   function sanitize(name) {
     return String(name).replace(/[\/\\:*?"<>|]/g, "_");
@@ -1152,6 +1153,12 @@ function createController(rootNode) {
       ok: true,
       cleanName,
       color: sourceColor,
+      ratioDelta: (sourceBounds && placedBoundsBefore && placedBoundsBefore.width > 0 && placedBoundsBefore.height > 0)
+        ? Math.max(
+            Math.abs((sourceBounds.width / placedBoundsBefore.width) - 1),
+            Math.abs((sourceBounds.height / placedBoundsBefore.height) - 1)
+          )
+        : null,
       observedOffset,
       placementFixNote,
       placementDebug: [
@@ -2010,10 +2017,6 @@ function createController(rootNode) {
         if (!groupId) {
           throw new Error("Missing destination group ID for " + group.name);
         }
-        const sourceBaseId = sourceBase ? layerIdOf(sourceBase) : 0;
-        const sourceBaseBounds = sourceBaseId
-          ? (await getLayerBoundsById(sourceBaseId, "Get Source Base Bounds For Trap Align"))
-          : null;
 
         appendStatus("Importing " + trapLayerName + "\n  png: " + spec.png + "\n  group: " + group.name);
         const selectResult = await selectLayerById(groupId, "Select Destination Group");
@@ -2034,15 +2037,20 @@ function createController(rootNode) {
         if (batchPlayResultHasError(renameResult)) {
           throw new Error("rename reported error\n" + summarizeBatchPlayResult(renameResult));
         }
-        if (sourceBaseBounds) {
-        const trapAlign = await alignTargetToReferenceBounds(
-          sourceBaseBounds,
-          "trapAlign",
-          { allowScale: false, allowMove: false }
-        );
-        appendStatus("  trap alignment: " + trapAlign.note);
+        if (cleanPlacementOffset && (Math.abs(cleanPlacementOffset.dx) > 0.5 || Math.abs(cleanPlacementOffset.dy) > 0.5)) {
+          const trapMove = await translateTargetLayerPixels(
+            cleanPlacementOffset.dx,
+            cleanPlacementOffset.dy,
+            "Apply Global CLEAN Offset To Trap Placement"
+          );
+          appendStatus(
+            "  trap placement offset: (" +
+            cleanPlacementOffset.dx.toFixed(2) + "," +
+            cleanPlacementOffset.dy.toFixed(2) + ")\n" +
+            summarizeBatchPlayResult(trapMove)
+          );
         } else {
-          appendStatus("  trap alignment: skipped (no source base bounds)");
+          appendStatus("  trap placement offset: none");
         }
 
         let originalPlacedId = 0;
@@ -2285,6 +2293,7 @@ function createController(rootNode) {
     await refreshDocumentSummary();
 
     const settings = getSettings();
+    cleanPlacementOffset = null;
     lines.push("");
     lines.push("CLEAN sync:");
     if (!settings.preflightCleanup) {
@@ -2327,7 +2336,10 @@ function createController(rootNode) {
               { forcedOffset: cleanGlobalOffset }
             );
             if (cleanResult && cleanResult.ok) {
-              if (!cleanGlobalOffset && cleanResult.observedOffset) {
+              const ratioDelta = Number(
+                cleanResult && cleanResult.ratioDelta != null ? cleanResult.ratioDelta : 999
+              );
+              if (!cleanGlobalOffset && cleanResult.observedOffset && ratioDelta <= 0.02) {
                 cleanGlobalOffset = {
                   dx: Number(cleanResult.observedOffset.dx || 0),
                   dy: Number(cleanResult.observedOffset.dy || 0)
@@ -2358,6 +2370,20 @@ function createController(rootNode) {
       }
       lines.push("  CLEAN built: " + cleanBuilt);
       lines.push("  CLEAN skipped: " + cleanSkipped);
+      if (cleanGlobalOffset) {
+        cleanPlacementOffset = {
+          dx: Number(cleanGlobalOffset.dx || 0),
+          dy: Number(cleanGlobalOffset.dy || 0)
+        };
+        lines.push(
+          "  CLEAN global placement offset for trap import: (" +
+          cleanPlacementOffset.dx.toFixed(2) + "," +
+          cleanPlacementOffset.dy.toFixed(2) + ")"
+        );
+      } else {
+        cleanPlacementOffset = null;
+        lines.push("  CLEAN global placement offset for trap import: (none captured)");
+      }
     }
 
     const descriptorDump = await getLayerDescriptorDump();
