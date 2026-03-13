@@ -798,6 +798,48 @@ function createController(rootNode) {
   }
 
   async function placeTrapPngIntoDocument(fileEntry) {
+    let targetDoc = null;
+    try { targetDoc = app.activeDocument; } catch (e) { targetDoc = null; }
+    if (!targetDoc) {
+      throw new Error("No active host document for trap import");
+    }
+
+    // Preferred path: open + duplicate layer into host to avoid placeEvent drift.
+    let openedDoc = null;
+    try {
+      openedDoc = await app.open(fileEntry);
+      const openedLayers = flattenTopLevelLayers(openedDoc);
+      if (!openedLayers.length) {
+        throw new Error("Opened trap PNG has no layers");
+      }
+      const sourceLayer = openedLayers[0];
+      await core.executeAsModal(async () => {
+        try { app.activeDocument = openedDoc; } catch (e) {}
+        await sourceLayer.duplicate(targetDoc);
+        try { app.activeDocument = targetDoc; } catch (e) {}
+      }, { commandName: "Duplicate Trap PNG Layer Into Host" });
+
+      let duplicatedLayerId = 0;
+      try {
+        const activeLayers = targetDoc.activeLayers || [];
+        if (activeLayers.length) duplicatedLayerId = Number(layerIdOf(activeLayers[0]) || 0);
+      } catch (e) {}
+
+      appendStatus("  place method: open+duplicate");
+      return [{ _obj: "duplicate", method: "open+duplicate", duplicatedLayerId: duplicatedLayerId || undefined }];
+    } catch (dupErr) {
+      appendStatus("  place method fallback to placeEvent: " + String(dupErr));
+    } finally {
+      if (openedDoc) {
+        try {
+          await openedDoc.closeWithoutSaving();
+        } catch (e) {
+          try { await openedDoc.close(constants.SaveOptions.DONOTSAVECHANGES); } catch (e2) {}
+        }
+      }
+      try { app.activeDocument = targetDoc; } catch (e) {}
+    }
+
     const token = localFileSystem.createSessionToken(fileEntry);
     const placeResult = await core.executeAsModal(async () => {
       return await action.batchPlay(
@@ -814,8 +856,8 @@ function createController(rootNode) {
       );
     }, { commandName: "Import Trap PNG" });
 
+    appendStatus("  place method: placeEvent (fallback)");
     appendStatus("  place normalization: disabled (native placeEvent coordinates)");
-
     return placeResult;
   }
 
