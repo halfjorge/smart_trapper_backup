@@ -938,6 +938,67 @@ function createController(rootNode) {
     }, { commandName: "Fill Trap Selection" });
   }
 
+  async function applyThresholdToTargetLayer(level) {
+    const lvl = Math.max(0, Math.min(255, Math.round(Number(level || 0))));
+    let lastErr = null;
+    const candidates = [
+      {
+        _obj: "thresholdClassEvent",
+        level: lvl,
+        _options: { dialogOptions: "dontDisplay" }
+      },
+      {
+        _obj: "threshold",
+        level: lvl,
+        _options: { dialogOptions: "dontDisplay" }
+      }
+    ];
+    for (let i = 0; i < candidates.length; i += 1) {
+      try {
+        const result = await core.executeAsModal(async () => {
+          return await action.batchPlay([candidates[i]], {});
+        }, { commandName: "Apply Threshold To CLEAN Temp Layer" });
+        if (!batchPlayResultHasError(result)) {
+          return result;
+        }
+        lastErr = summarizeBatchPlayResult(result);
+      } catch (e) {
+        lastErr = String(e);
+      }
+    }
+    throw new Error("threshold failed: " + String(lastErr || "unknown"));
+  }
+
+  async function expandSelectionByPixels(px) {
+    const val = Number(px || 0);
+    if (!(val > 0)) return null;
+    return await core.executeAsModal(async () => {
+      return await action.batchPlay(
+        [{
+          _obj: "expand",
+          by: Math.max(1, Math.round(val)),
+          _options: { dialogOptions: "dontDisplay" }
+        }],
+        {}
+      );
+    }, { commandName: "Expand CLEAN Selection" });
+  }
+
+  async function contractSelectionByPixels(px) {
+    const val = Number(px || 0);
+    if (!(val > 0)) return null;
+    return await core.executeAsModal(async () => {
+      return await action.batchPlay(
+        [{
+          _obj: "contract",
+          by: Math.max(1, Math.round(val)),
+          _options: { dialogOptions: "dontDisplay" }
+        }],
+        {}
+      );
+    }, { commandName: "Contract CLEAN Selection" });
+  }
+
   async function setLayerVisibilityById(layerId, visible, commandName) {
     if (!layerId) throw new Error("Missing layer ID for visibility set");
     const wantVisible = !!visible;
@@ -985,23 +1046,7 @@ function createController(rootNode) {
     return { checkedGroups, hidden, failed, details };
   }
 
-  async function buildCleanLayerInGroup(group, sourceName, maskColors, placementOptions) {
-    if (!currentJobFolderEntry) {
-      return { ok: false, message: "No job folder selected for clean layer import" };
-    }
-
-    const cleanFileName = "clean_masks/CLEAN__" + sanitize(sourceName) + ".png";
-    const cleanPngEntry = await getEntryByRelativePath(currentJobFolderEntry, cleanFileName);
-    const cleanPngDpi = await getPngDpi(cleanPngEntry);
-    let docRes = 0;
-    let docWidth = 0;
-    let docHeight = 0;
-    try {
-      const d = app.activeDocument;
-      docRes = Number(d.resolution || 0);
-      docWidth = Number((d.width && d.width.value) || d.width || 0);
-      docHeight = Number((d.height && d.height.value) || d.height || 0);
-    } catch (e) {}
+  async function buildCleanLayerInGroup(group, sourceName, maskColors) {
     const sourceColor = maskColors[sourceName] || null;
     if (!sourceColor) {
       return { ok: false, message: "No source color metadata for " + sourceName };
@@ -1029,124 +1074,79 @@ function createController(rootNode) {
     }
     const sourceBounds = await getLayerBoundsById(originalLayerId, "Get Source Bounds For CLEAN");
 
-    const placeResult = await placeTrapPngIntoDocument(cleanPngEntry);
-    if (batchPlayResultHasError(placeResult)) {
-      return { ok: false, message: "Clean PNG place failed\n" + summarizeBatchPlayResult(placeResult) };
-    }
-
-    let originalPlacedId = 0;
+    let tmpLayerId = 0;
+    let methodNote = "method=in-document-alpha-threshold";
     try {
-      const activeLayers = app.activeDocument.activeLayers || [];
-      if (activeLayers.length) {
-        originalPlacedId = Number(layerIdOf(activeLayers[0]) || 0);
+      const selectOrig = await selectLayerById(originalLayerId, "Select Source Layer For CLEAN Selection");
+      if (batchPlayResultHasError(selectOrig)) {
+        return { ok: false, message: "Source layer select failed\n" + summarizeBatchPlayResult(selectOrig) };
       }
-    } catch (e) {}
 
-    const renameResult = await renameTargetLayer(cleanName + "__PLACED_TMP");
-    if (batchPlayResultHasError(renameResult)) {
-      return { ok: false, message: "Clean temp rename failed\n" + summarizeBatchPlayResult(renameResult) };
-    }
+      const selectTransparency = await loadSelectionFromTargetTransparency();
+      if (batchPlayResultHasError(selectTransparency)) {
+        return { ok: false, message: "Source transparency selection failed\n" + summarizeBatchPlayResult(selectTransparency) };
+      }
 
-    let placedBoundsBefore = await getTargetLayerBoundsPx();
-    let placementFixNote = "placement check skipped";
-    let observedOffset = null;
-    if (sourceBounds && placedBoundsBefore && placedBoundsBefore.width > 0 && placedBoundsBefore.height > 0) {
-      const widthRatio = sourceBounds.width / placedBoundsBefore.width;
-      const heightRatio = sourceBounds.height / placedBoundsBefore.height;
-      const ratioDelta = Math.max(
-        Math.abs(widthRatio - 1),
-        Math.abs(heightRatio - 1)
-      );
-      const sourceCenterX = (sourceBounds.left + sourceBounds.right) / 2;
-      const sourceCenterY = (sourceBounds.top + sourceBounds.bottom) / 2;
-      const placedCenterX = (placedBoundsBefore.left + placedBoundsBefore.right) / 2;
-      const placedCenterY = (placedBoundsBefore.top + placedBoundsBefore.bottom) / 2;
-      const centerDx = sourceCenterX - placedCenterX;
-      const centerDy = sourceCenterY - placedCenterY;
-      const centerDist = Math.max(Math.abs(centerDx), Math.abs(centerDy));
-      const forcedOffset =
-        (placementOptions && placementOptions.forcedOffset)
-          ? {
-              dx: Number(placementOptions.forcedOffset.dx || 0),
-              dy: Number(placementOptions.forcedOffset.dy || 0)
-            }
-          : null;
-      const canUseForcedOffset = !!forcedOffset;
-      const shouldFixScale = false; // CLEAN placement is translation-only; never scale to source bounds.
-      const shouldFixShift = centerDist > 10;
-      placementFixNote =
-        "source=[" + fmtBounds(sourceBounds) + "] placedBefore=[" + fmtBounds(placedBoundsBefore) + "] " +
-        "ratioDelta=" + ratioDelta.toFixed(4) + " centerDx=" + centerDx.toFixed(2) + " centerDy=" + centerDy.toFixed(2);
+      const makeTmp = await createLayerAboveCurrent("__TMP_CLEAN_BUILD__");
+      if (batchPlayResultHasError(makeTmp)) {
+        return { ok: false, message: "CLEAN temp layer creation failed\n" + summarizeBatchPlayResult(makeTmp) };
+      }
+      try {
+        const activeLayers = app.activeDocument.activeLayers || [];
+        if (activeLayers.length) tmpLayerId = Number(layerIdOf(activeLayers[0]) || 0);
+      } catch (e) {}
 
-      if (canUseForcedOffset) {
-        observedOffset = { dx: forcedOffset.dx, dy: forcedOffset.dy };
-        placementFixNote +=
-          " | usingForcedOffset=(" +
-          observedOffset.dx.toFixed(2) + "," +
-          observedOffset.dy.toFixed(2) + ")";
+      const fillTmp = await fillSelectionWithRgb({ r: 255, g: 255, b: 255 });
+      if (batchPlayResultHasError(fillTmp)) {
+        return { ok: false, message: "CLEAN temp fill failed\n" + summarizeBatchPlayResult(fillTmp) };
+      }
+
+      try { await deselectSelection(); } catch (e) {}
+
+      const thResult = await applyThresholdToTargetLayer(getSettings().alphaThreshold);
+      if (batchPlayResultHasError(thResult)) {
+        return { ok: false, message: "CLEAN threshold failed\n" + summarizeBatchPlayResult(thResult) };
+      }
+
+      const selectTmpTransparency = await loadSelectionFromTargetTransparency();
+      if (batchPlayResultHasError(selectTmpTransparency)) {
+        return { ok: false, message: "CLEAN temp transparency selection failed\n" + summarizeBatchPlayResult(selectTmpTransparency) };
+      }
+
+      const edgeBias = Number(getSettings().edgeBiasPx || 0);
+      if (edgeBias > 0) {
+        const ex = await expandSelectionByPixels(edgeBias);
+        methodNote += " | edgeBias=expand(" + Math.max(1, Math.round(edgeBias)) + ")";
+        if (ex && batchPlayResultHasError(ex)) methodNote += " | expandWarn";
+      } else if (edgeBias < 0) {
+        const ct = await contractSelectionByPixels(Math.abs(edgeBias));
+        methodNote += " | edgeBias=contract(" + Math.max(1, Math.round(Math.abs(edgeBias))) + ")";
+        if (ct && batchPlayResultHasError(ct)) methodNote += " | contractWarn";
       } else {
-        observedOffset = { dx: centerDx, dy: centerDy };
+        methodNote += " | edgeBias=none";
       }
 
-      if (shouldFixScale) {
-        const scalePctX = widthRatio * 100;
-        const scalePctY = heightRatio * 100;
-        const scaleResult = await scaleTargetLayerPercent(scalePctX, scalePctY, "Fix CLEAN Placed Scale");
-        if (!batchPlayResultHasError(scaleResult)) {
-          placedBoundsBefore = await getTargetLayerBoundsPx();
-          placementFixNote += " | scaleFix=(" + scalePctX.toFixed(4) + "%," + scalePctY.toFixed(4) + "%)";
-        } else {
-          placementFixNote += " | scaleFixFailed";
-        }
+      const reselectOrig = await selectLayerById(originalLayerId, "Reselect Source Layer For CLEAN Fill");
+      if (batchPlayResultHasError(reselectOrig)) {
+        return { ok: false, message: "Source layer reselect failed\n" + summarizeBatchPlayResult(reselectOrig) };
       }
 
-      if (shouldFixShift || observedOffset) {
-        const currentBounds = placedBoundsBefore || (await getTargetLayerBoundsPx());
-        if (currentBounds) {
-          const curCx = (currentBounds.left + currentBounds.right) / 2;
-          const curCy = (currentBounds.top + currentBounds.bottom) / 2;
-          const moveDx = observedOffset ? observedOffset.dx : (sourceCenterX - curCx);
-          const moveDy = observedOffset ? observedOffset.dy : (sourceCenterY - curCy);
-          if (Math.abs(moveDx) > 0.5 || Math.abs(moveDy) > 0.5) {
-            const moveResult = await translateTargetLayerPixels(moveDx, moveDy, "Fix CLEAN Placed Offset");
-            if (!batchPlayResultHasError(moveResult)) {
-              const placedAfter = await getTargetLayerBoundsPx();
-              placementFixNote += " | moveFix=(" + moveDx.toFixed(2) + "," + moveDy.toFixed(2) + ")";
-              placementFixNote += " | placedAfter=[" + fmtBounds(placedAfter) + "]";
-            } else {
-              placementFixNote += " | moveFixFailed";
-            }
-          }
-        }
+      const makeCleanLayer = await createLayerAboveCurrent(cleanName);
+      if (batchPlayResultHasError(makeCleanLayer)) {
+        return { ok: false, message: "CLEAN layer creation failed\n" + summarizeBatchPlayResult(makeCleanLayer) };
       }
-    }
 
-    const selectTransparency = await loadSelectionFromTargetTransparency();
-    if (batchPlayResultHasError(selectTransparency)) {
-      return { ok: false, message: "Clean transparency selection failed\n" + summarizeBatchPlayResult(selectTransparency) };
-    }
+      const fillResult = await fillSelectionWithRgb(sourceColor);
+      if (batchPlayResultHasError(fillResult)) {
+        return { ok: false, message: "CLEAN fill failed\n" + summarizeBatchPlayResult(fillResult) };
+      }
 
-    const selectOrig = await selectLayerById(originalLayerId, "Select Source Layer For CLEAN Fill");
-    if (batchPlayResultHasError(selectOrig)) {
-      return { ok: false, message: "Source layer select failed\n" + summarizeBatchPlayResult(selectOrig) };
-    }
-
-    const makeCleanLayer = await createLayerAboveCurrent(cleanName);
-    if (batchPlayResultHasError(makeCleanLayer)) {
-      return { ok: false, message: "CLEAN layer creation failed\n" + summarizeBatchPlayResult(makeCleanLayer) };
-    }
-
-    const fillResult = await fillSelectionWithRgb(sourceColor);
-    if (batchPlayResultHasError(fillResult)) {
-      return { ok: false, message: "CLEAN fill failed\n" + summarizeBatchPlayResult(fillResult) };
-    }
-
-    try {
-      await deselectSelection();
-    } catch (e) {}
-
-    if (originalPlacedId) {
-      await deleteLayerById(originalPlacedId, "Delete Original Placed CLEAN Temp");
+      try { await deselectSelection(); } catch (e) {}
+    } finally {
+      if (tmpLayerId) {
+        try { await deleteLayerById(tmpLayerId, "Delete CLEAN Temp Layer"); } catch (e) {}
+      }
+      try { await deselectSelection(); } catch (e) {}
     }
 
     try {
@@ -1157,22 +1157,14 @@ function createController(rootNode) {
       ok: true,
       cleanName,
       color: sourceColor,
-      ratioDelta: (sourceBounds && placedBoundsBefore && placedBoundsBefore.width > 0 && placedBoundsBefore.height > 0)
-        ? Math.max(
-            Math.abs((sourceBounds.width / placedBoundsBefore.width) - 1),
-            Math.abs((sourceBounds.height / placedBoundsBefore.height) - 1)
-          )
-        : null,
-      observedOffset,
-      placementFixNote,
+      ratioDelta: null,
+      observedOffset: null,
+      placementFixNote: methodNote,
       placementDebug: [
         "source=" + sourceName,
-        "cleanPng=" + cleanFileName,
-        "pngDpi=" + (cleanPngDpi ? cleanPngDpi.toFixed(4) : "missing"),
-        "docRes=" + (docRes ? docRes.toFixed(4) : "unknown"),
-        "docSize=" + docWidth + "x" + docHeight,
         "sourceBounds=[" + fmtBounds(sourceBounds) + "]",
-        "placement=" + placementFixNote
+        "cleanBuild=" + methodNote,
+        "alphaThreshold=" + Number(getSettings().alphaThreshold || 0)
       ].join(" | ")
     };
   }
@@ -2324,86 +2316,46 @@ function createController(rootNode) {
       const maskColors = await readOptionalJsonFile(currentJobFolderEntry, "mask_colors.json") || {};
       let cleanBuilt = 0;
       let cleanSkipped = 0;
-      let cleanGlobalOffset = null;
-      let cleanMasksReady = true;
-      try {
-        await currentJobFolderEntry.getEntry("clean_masks");
-      } catch (e) {
-        cleanMasksReady = false;
-      }
+      const freshLayers = flattenTopLevelLayers(doc);
+      for (let i = freshLayers.length - 2; i >= 1; i -= 1) {
+        const maybeGroup = freshLayers[i];
+        if (!maybeGroup || !isGroupLikeLayer(maybeGroup)) continue;
+        if (String(maybeGroup.name || "").indexOf("COLOR__") !== 0) continue;
 
-      if (!cleanMasksReady) {
-        lines.push("  skipped: clean_masks folder not found in selected job folder");
-        lines.push("  hint: run 'Run Trapper' first, then 'Prepare Import Structure'");
-      } else {
-        const freshLayers = flattenTopLevelLayers(doc);
-        for (let i = freshLayers.length - 2; i >= 1; i -= 1) {
-          const maybeGroup = freshLayers[i];
-          if (!maybeGroup || !isGroupLikeLayer(maybeGroup)) continue;
-          if (String(maybeGroup.name || "").indexOf("COLOR__") !== 0) continue;
+        let sourceName = String(maybeGroup.name || "").substring(7);
+        const origInGroup = findArtLayerByNameInfo(maybeGroup, sourceName);
+        if (origInGroup && !origInGroup.__descriptor) {
+          sourceName = logicalInkName(origInGroup.name);
+        }
 
-          let sourceName = String(maybeGroup.name || "").substring(7);
-          const origInGroup = findArtLayerByNameInfo(maybeGroup, sourceName);
-          if (origInGroup && !origInGroup.__descriptor) {
-            sourceName = logicalInkName(origInGroup.name);
-          }
-
-          try {
-            const cleanResult = await buildCleanLayerInGroup(
-              maybeGroup,
-              sourceName,
-              maskColors,
-              { forcedOffset: cleanGlobalOffset }
+        try {
+          const cleanResult = await buildCleanLayerInGroup(
+            maybeGroup,
+            sourceName,
+            maskColors
+          );
+          if (cleanResult && cleanResult.ok) {
+            cleanBuilt += 1;
+            lines.push(
+              "  CLEAN " + sourceName + " -> " + cleanResult.cleanName +
+              " RGB(" + cleanResult.color.r + "," + cleanResult.color.g + "," + cleanResult.color.b + ")"
             );
-            if (cleanResult && cleanResult.ok) {
-              const ratioDelta = Number(
-                cleanResult && cleanResult.ratioDelta != null ? cleanResult.ratioDelta : 999
-              );
-              if (!cleanGlobalOffset && cleanResult.observedOffset && ratioDelta <= 0.02) {
-                cleanGlobalOffset = {
-                  dx: Number(cleanResult.observedOffset.dx || 0),
-                  dy: Number(cleanResult.observedOffset.dy || 0)
-                };
-                lines.push(
-                  "    captured clean global offset: (" +
-                  cleanGlobalOffset.dx.toFixed(2) + "," +
-                  cleanGlobalOffset.dy.toFixed(2) + ")"
-                );
-              }
-              cleanBuilt += 1;
-              lines.push(
-                "  CLEAN " + sourceName + " -> " + cleanResult.cleanName +
-                " RGB(" + cleanResult.color.r + "," + cleanResult.color.g + "," + cleanResult.color.b + ")"
-              );
-              if (cleanResult.placementDebug) {
-                lines.push("    debug: " + cleanResult.placementDebug);
-              }
-            } else {
-              cleanSkipped += 1;
-              lines.push("  CLEAN skip " + sourceName + ": " + ((cleanResult && cleanResult.message) || "unknown"));
+            if (cleanResult.placementDebug) {
+              lines.push("    debug: " + cleanResult.placementDebug);
             }
-          } catch (e) {
+          } else {
             cleanSkipped += 1;
-            lines.push("  CLEAN error " + sourceName + ": " + String(e));
+            lines.push("  CLEAN skip " + sourceName + ": " + ((cleanResult && cleanResult.message) || "unknown"));
           }
+        } catch (e) {
+          cleanSkipped += 1;
+          lines.push("  CLEAN error " + sourceName + ": " + String(e));
         }
       }
       lines.push("  CLEAN built: " + cleanBuilt);
       lines.push("  CLEAN skipped: " + cleanSkipped);
-      if (cleanGlobalOffset) {
-        cleanPlacementOffset = {
-          dx: Number(cleanGlobalOffset.dx || 0),
-          dy: Number(cleanGlobalOffset.dy || 0)
-        };
-        lines.push(
-          "  CLEAN global placement offset for trap import: (" +
-          cleanPlacementOffset.dx.toFixed(2) + "," +
-          cleanPlacementOffset.dy.toFixed(2) + ")"
-        );
-      } else {
-        cleanPlacementOffset = null;
-        lines.push("  CLEAN global placement offset for trap import: (none captured)");
-      }
+      cleanPlacementOffset = null;
+      lines.push("  CLEAN global placement offset for trap import: disabled (in-document CLEAN build)");
     }
 
     const descriptorDump = await getLayerDescriptorDump();
