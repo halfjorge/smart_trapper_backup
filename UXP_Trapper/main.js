@@ -1069,18 +1069,24 @@ function createController(rootNode) {
               dy: Number(placementOptions.forcedOffset.dy || 0)
             }
           : null;
-      const shouldFixScale = ratioDelta > 0.15 && !forcedOffset;
+      const canUseForcedOffset = !!forcedOffset && ratioDelta <= 0.02;
+      const shouldFixScale = ratioDelta > 0.15 && !canUseForcedOffset;
       const shouldFixShift = centerDist > 10;
       placementFixNote =
         "source=[" + fmtBounds(sourceBounds) + "] placedBefore=[" + fmtBounds(placedBoundsBefore) + "] " +
         "ratioDelta=" + ratioDelta.toFixed(4) + " centerDx=" + centerDx.toFixed(2) + " centerDy=" + centerDy.toFixed(2);
 
-      if (forcedOffset) {
+      if (canUseForcedOffset) {
         observedOffset = { dx: forcedOffset.dx, dy: forcedOffset.dy };
         placementFixNote +=
           " | usingForcedOffset=(" +
           observedOffset.dx.toFixed(2) + "," +
           observedOffset.dy.toFixed(2) + ")";
+      } else if (forcedOffset) {
+        placementFixNote +=
+          " | forcedOffsetSkipped(ratioDelta=" +
+          ratioDelta.toFixed(4) +
+          ")";
       } else if (ratioDelta <= 0.02) {
         observedOffset = { dx: centerDx, dy: centerDy };
       }
