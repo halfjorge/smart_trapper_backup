@@ -2329,7 +2329,6 @@ function createController(rootNode) {
       const maskColors = await readOptionalJsonFile(currentJobFolderEntry, "mask_colors.json") || {};
       let cleanBuilt = 0;
       let cleanSkipped = 0;
-      let cleanGlobalOffset = null;
       let cleanMasksReady = true;
       try {
         await currentJobFolderEntry.getEntry("clean_masks");
@@ -2358,23 +2357,9 @@ function createController(rootNode) {
               maybeGroup,
               sourceName,
               maskColors,
-              { forcedOffset: cleanGlobalOffset }
+              null
             );
             if (cleanResult && cleanResult.ok) {
-              const ratioDelta = Number(
-                cleanResult && cleanResult.ratioDelta != null ? cleanResult.ratioDelta : 999
-              );
-              if (!cleanGlobalOffset && cleanResult.observedOffset && ratioDelta <= 0.02) {
-                cleanGlobalOffset = {
-                  dx: Number(cleanResult.observedOffset.dx || 0),
-                  dy: Number(cleanResult.observedOffset.dy || 0)
-                };
-                lines.push(
-                  "    captured clean global offset: (" +
-                  cleanGlobalOffset.dx.toFixed(2) + "," +
-                  cleanGlobalOffset.dy.toFixed(2) + ")"
-                );
-              }
               cleanBuilt += 1;
               lines.push(
                 "  CLEAN " + sourceName + " -> " + cleanResult.cleanName +
@@ -2395,20 +2380,8 @@ function createController(rootNode) {
       }
       lines.push("  CLEAN built: " + cleanBuilt);
       lines.push("  CLEAN skipped: " + cleanSkipped);
-      if (cleanGlobalOffset) {
-        cleanPlacementOffset = {
-          dx: Number(cleanGlobalOffset.dx || 0),
-          dy: Number(cleanGlobalOffset.dy || 0)
-        };
-        lines.push(
-          "  CLEAN global placement offset for trap import: (" +
-          cleanPlacementOffset.dx.toFixed(2) + "," +
-          cleanPlacementOffset.dy.toFixed(2) + ")"
-        );
-      } else {
-        cleanPlacementOffset = null;
-        lines.push("  CLEAN global placement offset for trap import: (none captured)");
-      }
+      cleanPlacementOffset = null;
+      lines.push("  CLEAN global placement offset for trap import: disabled (per-layer alignment only)");
     }
 
     const descriptorDump = await getLayerDescriptorDump();
