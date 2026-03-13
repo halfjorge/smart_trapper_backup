@@ -1071,8 +1071,8 @@ function createController(rootNode) {
               dy: Number(placementOptions.forcedOffset.dy || 0)
             }
           : null;
-      const canUseForcedOffset = !!forcedOffset && ratioDelta <= 0.02;
-      const shouldFixScale = ratioDelta > 0.02 && !canUseForcedOffset;
+      const canUseForcedOffset = !!forcedOffset;
+      const shouldFixScale = false; // CLEAN placement is translation-only; never scale to source bounds.
       const shouldFixShift = centerDist > 10;
       placementFixNote =
         "source=[" + fmtBounds(sourceBounds) + "] placedBefore=[" + fmtBounds(placedBoundsBefore) + "] " +
@@ -1084,12 +1084,7 @@ function createController(rootNode) {
           " | usingForcedOffset=(" +
           observedOffset.dx.toFixed(2) + "," +
           observedOffset.dy.toFixed(2) + ")";
-      } else if (forcedOffset) {
-        placementFixNote +=
-          " | forcedOffsetSkipped(ratioDelta=" +
-          ratioDelta.toFixed(4) +
-          ")";
-      } else if (ratioDelta <= 0.02) {
+      } else {
         observedOffset = { dx: centerDx, dy: centerDy };
       }
 
@@ -1105,7 +1100,7 @@ function createController(rootNode) {
         }
       }
 
-      if (shouldFixShift || shouldFixScale || observedOffset) {
+      if (shouldFixShift || observedOffset) {
         const currentBounds = placedBoundsBefore || (await getTargetLayerBoundsPx());
         if (currentBounds) {
           const curCx = (currentBounds.left + currentBounds.right) / 2;
@@ -2329,6 +2324,7 @@ function createController(rootNode) {
       const maskColors = await readOptionalJsonFile(currentJobFolderEntry, "mask_colors.json") || {};
       let cleanBuilt = 0;
       let cleanSkipped = 0;
+      let cleanGlobalOffset = null;
       let cleanMasksReady = true;
       try {
         await currentJobFolderEntry.getEntry("clean_masks");
@@ -2357,9 +2353,23 @@ function createController(rootNode) {
               maybeGroup,
               sourceName,
               maskColors,
-              null
+              { forcedOffset: cleanGlobalOffset }
             );
             if (cleanResult && cleanResult.ok) {
+              const ratioDelta = Number(
+                cleanResult && cleanResult.ratioDelta != null ? cleanResult.ratioDelta : 999
+              );
+              if (!cleanGlobalOffset && cleanResult.observedOffset && ratioDelta <= 0.02) {
+                cleanGlobalOffset = {
+                  dx: Number(cleanResult.observedOffset.dx || 0),
+                  dy: Number(cleanResult.observedOffset.dy || 0)
+                };
+                lines.push(
+                  "    captured clean global offset: (" +
+                  cleanGlobalOffset.dx.toFixed(2) + "," +
+                  cleanGlobalOffset.dy.toFixed(2) + ")"
+                );
+              }
               cleanBuilt += 1;
               lines.push(
                 "  CLEAN " + sourceName + " -> " + cleanResult.cleanName +
@@ -2380,8 +2390,20 @@ function createController(rootNode) {
       }
       lines.push("  CLEAN built: " + cleanBuilt);
       lines.push("  CLEAN skipped: " + cleanSkipped);
-      cleanPlacementOffset = null;
-      lines.push("  CLEAN global placement offset for trap import: disabled (per-layer alignment only)");
+      if (cleanGlobalOffset) {
+        cleanPlacementOffset = {
+          dx: Number(cleanGlobalOffset.dx || 0),
+          dy: Number(cleanGlobalOffset.dy || 0)
+        };
+        lines.push(
+          "  CLEAN global placement offset for trap import: (" +
+          cleanPlacementOffset.dx.toFixed(2) + "," +
+          cleanPlacementOffset.dy.toFixed(2) + ")"
+        );
+      } else {
+        cleanPlacementOffset = null;
+        lines.push("  CLEAN global placement offset for trap import: (none captured)");
+      }
     }
 
     const descriptorDump = await getLayerDescriptorDump();
