@@ -471,36 +471,6 @@ fn main()->Result<()>{
     plate_names.push(job.keyLayerName.clone());
     plates.push(key_mask);
 
-    // Detect touching boundaries
-    let mut pair_boundary:HashMap<(usize,usize),Vec<u8>>=HashMap::new();
-    let neigh=dirs8();
-
-    for y in 0..h as i32{
-        for x in 0..w as i32{
-            let idx=(y as u32*w+x as u32)as usize;
-
-            for (dx,dy) in neigh{
-                let nx=x+dx;
-                let ny=y+dy;
-                if nx<0||ny<0||nx>=w as i32||ny>=h as i32{continue;}
-                let nidx=(ny as u32*w+nx as u32)as usize;
-
-                for a in 0..plates.len(){
-                    if plates[a][idx]==0{continue;}
-                    for b in 0..plates.len(){
-                        if a==b{continue;}
-                        if plates[b][nidx]==0{continue;}
-
-                        let lower=a.min(b);
-                        let upper=a.max(b);
-                        pair_boundary.entry((lower,upper))
-                            .or_insert_with(||vec![0u8;n])[idx]=1;
-                    }
-                }
-            }
-        }
-    }
-
     let traps_dir=job_folder.join("traps");
     if traps_dir.exists(){ fs::remove_dir_all(&traps_dir)?; }
     fs::create_dir_all(&traps_dir)?;
@@ -516,31 +486,35 @@ fn main()->Result<()>{
 
     let mut out=TrapsOut{traps:vec![]};
 
-    for ((lower,upper),_) in pair_boundary{
-        let dist=edt(&plates[lower],w,h);
-        let mut trap_mask=vec![0u8;n];
-
-        for i in 0..n{
-            if plates[upper][i]!=0 && dist[i]<=trap_px as f32{
-                trap_mask[i]=1;
+    // Pairwise trap rule (legacy-compatible):
+    // Trap(A over B) = (dilate(A, trapPx) & B) & !A
+    // This prevents paper-edge trap islands because target B must actually exist.
+    for ai in 0..plates.len(){
+        let a=&plates[ai];
+        let da=dilate_n(a.clone(),w,h,trap_px as u32);
+        for bi in (ai+1)..plates.len(){
+            let b=&plates[bi];
+            let mut trap_mask=vec![0u8;n];
+            for i in 0..n{
+                if da[i]!=0 && b[i]!=0 && a[i]==0{
+                    trap_mask[i]=1;
+                }
             }
+            if !any_on(&trap_mask){continue;}
+
+            let src=plate_names[ai].clone();
+            let tgt=plate_names[bi].clone();
+
+            let file_name=format!("TRAP__{}_over_{}.png",sanitize(&src),sanitize(&tgt));
+            let out_path=traps_dir.join(&file_name);
+            write_mask_png(&out_path,&trap_mask,w,h,job.resolution)?;
+
+            out.traps.push(TrapSpec{
+                source:src,
+                target:tgt,
+                png:format!("traps/{}",file_name),
+            });
         }
-
-        if !any_on(&trap_mask){continue;}
-
-        let src=plate_names[lower].clone();
-        let tgt=plate_names[upper].clone();
-
-        let file_name=format!("TRAP__{}_over_{}.png",sanitize(&src),sanitize(&tgt));
-        let out_path=traps_dir.join(&file_name);
-
-        write_mask_png(&out_path,&trap_mask,w,h,job.resolution)?;
-
-        out.traps.push(TrapSpec{
-            source:src,
-            target:tgt,
-            png:format!("traps/{}",file_name),
-        });
     }
 
     fs::write(

@@ -11,6 +11,8 @@ UXP_Trapper/status_logs/
 UXP_Trapper/*_last_run.json
 SmartTrapper_Share/
 Trapper_CEP_Panel/
+trapper old/
+trapper OLD/
 
 # Generated run artifacts (export/job output)
 *_20*
