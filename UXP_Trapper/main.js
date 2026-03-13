@@ -2013,6 +2013,7 @@ function createController(rootNode) {
           throw new Error("Missing destination group COLOR__" + sanitizeInkName(spec.source));
         }
         const sourceBase = findSourceBaseLayerInfo(group, spec.source);
+        const sourceBaseId = sourceBase ? Number(layerIdOf(sourceBase) || 0) : 0;
         const groupId = layerIdOf(group);
         if (!groupId) {
           throw new Error("Missing destination group ID for " + group.name);
@@ -2071,14 +2072,14 @@ function createController(rootNode) {
               throw new Error("transparency selection reported error\n" + summarizeBatchPlayResult(selectTransparency));
             }
 
-            if (!sourceBaseId) {
-              throw new Error("Missing source base layer ID for " + sourceBase.name);
-            }
-
-            const selectBase = await selectLayerById(sourceBaseId, "Select Source Base For Trap Fill");
-            appendStatus("  select source base result:\n" + summarizeBatchPlayResult(selectBase));
-            if (batchPlayResultHasError(selectBase)) {
-              throw new Error("source base select reported error\n" + summarizeBatchPlayResult(selectBase));
+            if (sourceBaseId) {
+              const selectBase = await selectLayerById(sourceBaseId, "Select Source Base For Trap Fill");
+              appendStatus("  select source base result:\n" + summarizeBatchPlayResult(selectBase));
+              if (batchPlayResultHasError(selectBase)) {
+                throw new Error("source base select reported error\n" + summarizeBatchPlayResult(selectBase));
+              }
+            } else {
+              appendStatus("  select source base skipped: missing source base layer id, using placed-layer anchored fill");
             }
 
             const makeTrapLayer = await createLayerAboveCurrent(trapLayerName);
@@ -2123,49 +2124,78 @@ function createController(rootNode) {
 
         if (!selectionFillDone) {
           try {
-            if (sourceColor) {
-              const colorResult = await applyColorOverlayToTargetLayer(sourceColor);
-              appendStatus(
-                "  color overlay result:\n" +
-                summarizeBatchPlayResult(colorResult) +
-                "\n  source color: RGB(" + sourceColor.r + "," + sourceColor.g + "," + sourceColor.b + ")"
-              );
-              if (batchPlayResultHasError(colorResult)) {
-                appendStatus("  color overlay warning: Photoshop reported an error applying color overlay");
-              }
-            } else {
-              appendStatus("  color overlay skipped: no source color metadata for " + spec.source);
+            if (!sourceColor) {
+              throw new Error("Fallback aborted: no source color metadata for " + spec.source);
             }
+
+            const selectTransparency = await loadSelectionFromTargetTransparency();
+            appendStatus(
+              "  fallback transparency selection result:\n" +
+              summarizeBatchPlayResult(selectTransparency)
+            );
+            if (batchPlayResultHasError(selectTransparency)) {
+              throw new Error("fallback transparency selection reported error\n" + summarizeBatchPlayResult(selectTransparency));
+            }
+
+            const makeTrapLayer = await createLayerAboveCurrent(trapLayerName);
+            appendStatus("  fallback create trap pixel layer result:\n" + summarizeBatchPlayResult(makeTrapLayer));
+            if (batchPlayResultHasError(makeTrapLayer)) {
+              throw new Error("fallback trap layer creation reported error\n" + summarizeBatchPlayResult(makeTrapLayer));
+            }
+
+            const fillResult = await fillSelectionWithRgb(sourceColor);
+            appendStatus(
+              "  fallback fill selection result:\n" +
+              summarizeBatchPlayResult(fillResult) +
+              "\n  source color: RGB(" + sourceColor.r + "," + sourceColor.g + "," + sourceColor.b + ")"
+            );
+            if (batchPlayResultHasError(fillResult)) {
+              throw new Error("fallback fill reported error\n" + summarizeBatchPlayResult(fillResult));
+            }
+
+            const deselectResult = await deselectSelection();
+            appendStatus("  fallback deselect result:\n" + summarizeBatchPlayResult(deselectResult));
+
+            let workingFallbackLayerId = 0;
+            try {
+              const activeBeforeDup = app.activeDocument.activeLayers || [];
+              if (activeBeforeDup.length) {
+                workingFallbackLayerId = Number(layerIdOf(activeBeforeDup[0]) || 0);
+              }
+            } catch (e) {}
 
             const dupInfo = await duplicateTargetLayerIntoGroup(group);
             appendStatus(
-              "  duplicate-to-group result:\n" +
+              "  fallback duplicate-to-group result:\n" +
               summarizeBatchPlayResult(dupInfo.result) +
               "\n  duplicate layer id: " + (dupInfo.duplicatedLayerId || "(missing)") +
               "\n  duplicate layer name: " + (dupInfo.duplicatedLayerName || "(missing)")
             );
-            if (!batchPlayResultHasError(dupInfo.result)) {
-              if (dupInfo.duplicatedLayerId && originalPlacedId && dupInfo.duplicatedLayerId !== originalPlacedId) {
-                const deleteOriginal = await deleteLayerById(originalPlacedId, "Delete Original Placed Trap Layer");
-                appendStatus("  delete original result:\n" + summarizeBatchPlayResult(deleteOriginal));
-                if (batchPlayResultHasError(deleteOriginal)) {
-                  appendStatus("  delete warning: original placed trap layer may remain at top level");
-                }
-              } else if (originalPlacedId) {
-                appendStatus("  delete warning: duplicate layer was not resolved as a distinct layer; original left in place");
-              } else {
-                appendStatus("  delete warning: could not resolve original placed layer ID");
-              }
-
-              if (dupInfo.duplicatedLayerId && originalPlacedId && dupInfo.duplicatedLayerId !== originalPlacedId) {
-                movedCount += 1;
-                appendStatus("Imported OK: " + trapLayerName + " -> " + group.name + "\n  duplicated into destination group");
-              } else {
-                appendStatus("Imported with grouping warning: " + trapLayerName + "\n  duplicate did not produce a distinct grouped layer");
-              }
-            } else {
-              appendStatus("Imported with grouping warning: " + trapLayerName + "\n  duplicate into destination group failed");
+            if (batchPlayResultHasError(dupInfo.result)) {
+              throw new Error("fallback duplicate into destination group failed");
             }
+
+            let cleanupDeleteFailed = false;
+            if (workingFallbackLayerId && dupInfo.duplicatedLayerId && workingFallbackLayerId !== dupInfo.duplicatedLayerId) {
+              const deleteOriginalFallback = await deleteLayerById(workingFallbackLayerId, "Delete Fallback Working Trap Layer");
+              appendStatus("  fallback delete working layer result:\n" + summarizeBatchPlayResult(deleteOriginalFallback));
+              cleanupDeleteFailed = batchPlayResultHasError(deleteOriginalFallback);
+            }
+
+            if (originalPlacedId) {
+              const deleteOriginalPlaced = await deleteLayerById(originalPlacedId, "Delete Original Placed Trap Layer");
+              appendStatus("  fallback delete placed layer result:\n" + summarizeBatchPlayResult(deleteOriginalPlaced));
+              if (batchPlayResultHasError(deleteOriginalPlaced)) {
+                cleanupDeleteFailed = true;
+              }
+            }
+
+            movedCount += 1;
+            appendStatus(
+              "Imported OK: " + trapLayerName + " -> " + group.name +
+              "\n  fallback completed as filled pixel layer" +
+              (cleanupDeleteFailed ? "\n  warning: cleanup delete reported an error" : "")
+            );
           } catch (groupErr) {
             appendStatus("Imported with grouping warning: " + trapLayerName + "\n  " + String(groupErr));
           }
