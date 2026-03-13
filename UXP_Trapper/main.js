@@ -1070,7 +1070,7 @@ function createController(rootNode) {
             }
           : null;
       const canUseForcedOffset = !!forcedOffset && ratioDelta <= 0.02;
-      const shouldFixScale = ratioDelta > 0.15 && !canUseForcedOffset;
+      const shouldFixScale = ratioDelta > 0.02 && !canUseForcedOffset;
       const shouldFixShift = centerDist > 10;
       placementFixNote =
         "source=[" + fmtBounds(sourceBounds) + "] placedBefore=[" + fmtBounds(placedBoundsBefore) + "] " +
@@ -2044,21 +2044,7 @@ function createController(rootNode) {
         if (batchPlayResultHasError(renameResult)) {
           throw new Error("rename reported error\n" + summarizeBatchPlayResult(renameResult));
         }
-        if (cleanPlacementOffset && (Math.abs(cleanPlacementOffset.dx) > 0.5 || Math.abs(cleanPlacementOffset.dy) > 0.5)) {
-          const trapMove = await translateTargetLayerPixels(
-            cleanPlacementOffset.dx,
-            cleanPlacementOffset.dy,
-            "Apply Global CLEAN Offset To Trap Placement"
-          );
-          appendStatus(
-            "  trap placement offset: (" +
-            cleanPlacementOffset.dx.toFixed(2) + "," +
-            cleanPlacementOffset.dy.toFixed(2) + ")\n" +
-            summarizeBatchPlayResult(trapMove)
-          );
-        } else {
-          appendStatus("  trap placement offset: none");
-        }
+        appendStatus("  trap placement offset: disabled (global offset no longer applied)");
 
         let originalPlacedId = 0;
         try {
