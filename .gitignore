@@ -1,30 +1,24 @@
 # Rust build output
 target/
-
-# Debug logs
-*.log
-
-# Photoshop export job folders
-*_20*
-
-# Windows junk
-Thumbs.db
-
-# Generated / build artifacts
-**/*.pdb
-**/*.d
-**/*.zip
-
-# Rust build output
 **/target/
 **/*.pdb
 **/*.d
 
+# Generated archives / artifacts
+**/*.zip
+spot_channel_debug_*.txt
+UXP_Trapper/status_logs/
+UXP_Trapper/*_last_run.json
+SmartTrapper_Share/
+Trapper_CEP_Panel/
+
 # Generated run artifacts (export/job output)
+*_20*
+job.json
+**/job.json
 **/masks/
 **/traps/
 **/debug/
-**/job.json
 **/traps.json
 **/*log*.txt
 **/*.log
@@ -36,14 +30,3 @@ Thumbs.db
 .DS_Store
 .vscode/
 .vs/
-
-# Generated job outputs (if these are export artifacts)
-job.json
-**/job.json
-**/masks/
-**/traps/
-**/traps.json
-**/*log*.txt
-
-# UXP runtime outputs
-UXP_Trapper/*_last_run.json
