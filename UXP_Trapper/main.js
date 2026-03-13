@@ -1117,6 +1117,83 @@ function createController(rootNode) {
     }
     const sourceBounds = await getLayerBoundsById(originalLayerId, "Get Source Bounds For CLEAN");
 
+    // Preferred CLEAN path: use engine-produced clean mask alpha directly.
+    // This preserves the exact alphaThreshold/edgeBias result from the trap engine.
+    try {
+      if (currentJobFolderEntry) {
+        const cleanFileName = "clean_masks/CLEAN__" + sanitize(sourceName) + ".png";
+        const cleanMaskEntry = await getEntryByRelativePath(currentJobFolderEntry, cleanFileName);
+        let cleanMaskLayerId = 0;
+        try {
+          const placeResult = await placeTrapPngIntoDocument(cleanMaskEntry);
+          appendStatus("  clean-mask place result:\n" + summarizeBatchPlayResult(placeResult));
+
+          const renameMask = await renameTargetLayer(cleanName + "__MASK_TMP");
+          if (batchPlayResultHasError(renameMask)) {
+            throw new Error("CLEAN mask tmp rename failed\n" + summarizeBatchPlayResult(renameMask));
+          }
+          try {
+            const activeLayers = app.activeDocument.activeLayers || [];
+            if (activeLayers.length) cleanMaskLayerId = Number(layerIdOf(activeLayers[0]) || 0);
+          } catch (e) {}
+
+          const selectMaskTransparency = await loadSelectionFromTargetTransparency();
+          if (batchPlayResultHasError(selectMaskTransparency)) {
+            throw new Error("CLEAN mask transparency selection failed\n" + summarizeBatchPlayResult(selectMaskTransparency));
+          }
+
+          const selectOrigForFill = await selectLayerById(originalLayerId, "Select Source Layer For CLEAN Fill (Mask Alpha)");
+          if (batchPlayResultHasError(selectOrigForFill)) {
+            throw new Error("Source layer select failed\n" + summarizeBatchPlayResult(selectOrigForFill));
+          }
+
+          const makeCleanLayer = await createLayerAboveCurrent(cleanName);
+          if (batchPlayResultHasError(makeCleanLayer)) {
+            throw new Error("CLEAN layer creation failed\n" + summarizeBatchPlayResult(makeCleanLayer));
+          }
+
+          const fillResult = await fillSelectionWithRgb(sourceColor);
+          if (batchPlayResultHasError(fillResult)) {
+            throw new Error("CLEAN fill failed\n" + summarizeBatchPlayResult(fillResult));
+          }
+
+          try { await deselectSelection(); } catch (e) {}
+
+          if (cleanMaskLayerId) {
+            try { await deleteLayerById(cleanMaskLayerId, "Delete CLEAN Mask Temp Layer"); } catch (e) {}
+          }
+
+          try {
+            await setLayerVisibilityById(originalLayerId, false, "Hide Original Source Layer");
+          } catch (e) {}
+
+          return {
+            ok: true,
+            cleanName,
+            color: sourceColor,
+            ratioDelta: null,
+            observedOffset: null,
+            placementFixNote: "method=engine-clean-mask-alpha",
+            placementDebug: [
+              "source=" + sourceName,
+              "sourceBounds=[" + fmtBounds(sourceBounds) + "]",
+              "cleanBuild=method=engine-clean-mask-alpha",
+              "cleanMask=" + cleanFileName,
+              "alphaThreshold=" + Number(getSettings().alphaThreshold || 0),
+              "edgeBiasPx=" + Number(getSettings().edgeBiasPx || 0)
+            ].join(" | ")
+          };
+        } finally {
+          if (cleanMaskLayerId) {
+            try { await deleteLayerById(cleanMaskLayerId, "Cleanup CLEAN Mask Temp Layer"); } catch (e) {}
+          }
+          try { await deselectSelection(); } catch (e) {}
+        }
+      }
+    } catch (cleanMaskErr) {
+      appendStatus("  CLEAN mask-alpha path fallback (" + sourceName + "): " + String(cleanMaskErr));
+    }
+
     let tmpLayerId = 0;
     let methodNote = "method=in-document-alpha-threshold";
     try {
