@@ -457,6 +457,7 @@ dependencies = [
  "anyhow",
  "clap",
  "image",
+ "png",
  "serde",
  "serde_json",
 ]

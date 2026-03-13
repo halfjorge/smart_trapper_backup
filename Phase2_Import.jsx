@@ -10,26 +10,28 @@ app.bringToFront();
   // DEBUG LOG
   // ======================
   var LOG = [];
+  var FULL_DEBUG = ($.global.PHASE2_FULL_DEBUG === true);
   function log(s){ LOG.push(String(s)); }
+  function debugLog(s){ if(FULL_DEBUG) LOG.push(String(s)); }
   function logDocState(doc, label){
     try{
-      log("[" + label + "] doc=" + doc.name);
+      debugLog("[" + label + "] doc=" + doc.name);
     }catch(e){}
     try{
-      log("[" + label + "] activeLayer=" + (doc.activeLayer ? doc.activeLayer.name : "null"));
+      debugLog("[" + label + "] activeLayer=" + (doc.activeLayer ? doc.activeLayer.name : "null"));
     }catch(e){}
     try{
       var chNames = [];
       for(var i=0;i<doc.activeChannels.length;i++) chNames.push(doc.activeChannels[i].name);
-      log("[" + label + "] activeChannels=" + chNames.join(", "));
+      debugLog("[" + label + "] activeChannels=" + chNames.join(", "));
     }catch(e){}
     try{
-      log("[" + label + "] hasSelection=" + hasSelection(doc));
+      debugLog("[" + label + "] hasSelection=" + hasSelection(doc));
     }catch(e){}
     try{
       if(hasSelection(doc)){
         var b = doc.selection.bounds;
-        log("[" + label + "] selBounds=" +
+        debugLog("[" + label + "] selBounds=" +
           b[0].as("px") + "," + b[1].as("px") + "," +
           b[2].as("px") + "," + b[3].as("px"));
       }
@@ -37,10 +39,10 @@ app.bringToFront();
   }
 
   function step(label, fn){
-    log("STEP BEGIN: " + label);
+    debugLog("STEP BEGIN: " + label);
     try{
       var out = fn();
-      log("STEP OK: " + label);
+      debugLog("STEP OK: " + label);
       return out;
     }catch(e){
       log("STEP FAIL: " + label + " :: " + e);
@@ -577,7 +579,7 @@ app.bringToFront();
       });
 
       function testPoint(x,y){
-        log("TEST POINT: " + x + "," + y);
+        debugLog("TEST POINT: " + x + "," + y);
         step("restoreCompositeChannels testPoint", function(){
           restoreCompositeChannels(doc);
         });
@@ -621,6 +623,135 @@ app.bringToFront();
     } finally {
       if(tmp){
         try { tmp.remove(); log("SCAN TMP REMOVED"); } catch(e2){ log("SCAN TMP REMOVE ERR: " + e2); }
+      }
+    }
+  }
+
+  function addCandidateProbe(points, seen, x, y, maxX, maxY){
+    x = Math.max(0, Math.min(maxX, Math.floor(x)));
+    y = Math.max(0, Math.min(maxY, Math.floor(y)));
+    var key = x + "," + y;
+    if(seen[key]) return;
+    seen[key] = true;
+    points.push([x, y]);
+  }
+
+  function findSamplePointByCandidates(doc){
+    log("SCAN CANDIDATES START");
+    if(!hasSelection(doc)){
+      log("SCAN CANDIDATES ABORT: no selection");
+      return null;
+    }
+
+    var b = doc.selection.bounds;
+    var rawL = Math.floor(b[0].as("px"));
+    var rawT = Math.floor(b[1].as("px"));
+    var rawR = Math.floor(b[2].as("px"));
+    var rawB = Math.floor(b[3].as("px"));
+    var maxX = Math.max(0, Math.floor(doc.width.as("px")) - 1);
+    var maxY = Math.max(0, Math.floor(doc.height.as("px")) - 1);
+    var L = Math.max(0, rawL);
+    var T = Math.max(0, rawT);
+    var R = Math.min(maxX + 1, rawR);
+    var B = Math.min(maxY + 1, rawB);
+
+    log("SCAN BOUNDS RAW: " + [rawL,rawT,rawR,rawB].join(","));
+    log("SCAN BOUNDS CLAMPED: " + [L,T,R,B].join(","));
+
+    if(L >= R || T >= B){
+      log("SCAN CANDIDATES ABORT: clamped bounds are empty");
+      return null;
+    }
+
+    var midX = Math.floor((L + R - 1) / 2);
+    var midY = Math.floor((T + B - 1) / 2);
+    var q1X = Math.floor((L + midX) / 2);
+    var q3X = Math.floor((midX + R - 1) / 2);
+    var q1Y = Math.floor((T + midY) / 2);
+    var q3Y = Math.floor((midY + B - 1) / 2);
+    var points = [];
+    var seen = {};
+    var tmp = null;
+    var found = null;
+
+    addCandidateProbe(points, seen, midX, midY, maxX, maxY);
+    addCandidateProbe(points, seen, q1X, q1Y, maxX, maxY);
+    addCandidateProbe(points, seen, q3X, q1Y, maxX, maxY);
+    addCandidateProbe(points, seen, q1X, q3Y, maxX, maxY);
+    addCandidateProbe(points, seen, q3X, q3Y, maxX, maxY);
+    addCandidateProbe(points, seen, L + 1, T + 1, maxX, maxY);
+    addCandidateProbe(points, seen, R - 2, T + 1, maxX, maxY);
+    addCandidateProbe(points, seen, L + 1, B - 2, maxX, maxY);
+    addCandidateProbe(points, seen, R - 2, B - 2, maxX, maxY);
+    addCandidateProbe(points, seen, midX, T + 1, maxX, maxY);
+    addCandidateProbe(points, seen, midX, B - 2, maxX, maxY);
+    addCandidateProbe(points, seen, L + 1, midY, maxX, maxY);
+    addCandidateProbe(points, seen, R - 2, midY, maxX, maxY);
+
+    try{
+      tmp = step("channels.add tmp candidate scan", function(){
+        var ch = doc.channels.add();
+        ch.name = "__TMP_SEL_SCAN__";
+        return ch;
+      });
+
+      step("selection.store tmp candidate scan", function(){
+        doc.selection.store(tmp);
+      });
+
+      step("selection.deselect after candidate store", function(){
+        doc.selection.deselect();
+      });
+
+      step("restoreCompositeChannels after candidate store", function(){
+        restoreCompositeChannels(doc);
+      });
+
+      for(var i=0;i<points.length;i++){
+        var p = points[i];
+        debugLog("CANDIDATE POINT: " + p[0] + "," + p[1]);
+        step("restoreCompositeChannels candidate point", function(){
+          restoreCompositeChannels(doc);
+        });
+        step("selection.deselect candidate point", function(){
+          doc.selection.deselect();
+        });
+        step("selection.select 1px candidate box", function(){
+          doc.selection.select([[p[0],p[1]],[p[0]+1,p[1]],[p[0]+1,p[1]+1],[p[0],p[1]+1]]);
+        });
+        step("selection.load INTERSECT candidate tmp", function(){
+          doc.selection.load(tmp, SelectionType.INTERSECT);
+        });
+        if(hasSelection(doc)){
+          found = p;
+          log("SCAN CANDIDATE HIT: " + p[0] + "," + p[1]);
+          break;
+        }
+      }
+
+      if(!found){
+        log("SCAN CANDIDATE MISS");
+      }
+
+      step("selection.deselect end candidate scan", function(){
+        doc.selection.deselect();
+      });
+      step("selection.load REPLACE candidate tmp", function(){
+        doc.selection.load(tmp, SelectionType.REPLACE);
+      });
+      step("restoreCompositeChannels end candidate scan", function(){
+        restoreCompositeChannels(doc);
+      });
+
+      return found;
+    } catch(e){
+      log("SCAN CANDIDATES ERROR :: " + e);
+      logDocState(doc, "scan-candidates-error-state");
+      throw e;
+    } finally {
+      try { restoreCompositeChannels(doc); } catch(e1){}
+      if(tmp){
+        try { tmp.remove(); log("SCAN CANDIDATE TMP REMOVED"); } catch(e2){ log("SCAN CANDIDATE TMP REMOVE ERR: " + e2); }
       }
     }
   }
@@ -672,9 +803,14 @@ app.bringToFront();
       });
 
       var pt = null;
-      step("find isolated sample point 25", function(){
-        pt = findSamplePointByScan(tmpDoc, 25);
+      step("find isolated sample point candidates", function(){
+        pt = findSamplePointByCandidates(tmpDoc);
       });
+      if(!pt){
+        step("find isolated sample point 25", function(){
+          pt = findSamplePointByScan(tmpDoc, 25);
+        });
+      }
       if(!pt){
         step("find isolated sample point 10", function(){
           pt = findSamplePointByScan(tmpDoc, 10);

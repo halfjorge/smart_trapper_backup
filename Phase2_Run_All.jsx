@@ -4,12 +4,143 @@ app.bringToFront();
 (function () {
 
   // --- Paths (same folder as this Run_All.jsx) ---
+  var IS_WINDOWS = $.os.toLowerCase().indexOf("windows") >= 0;
   var base = File($.fileName).parent.fsName;
-  var EXPORT_SCRIPT = base + "\\Phase2_Export.jsx";
-  var IMPORT_SCRIPT = base + "\\Phase2_Import.jsx";
+  var EXPORT_SCRIPT = File(base + "/Phase2_Export.jsx").fsName;
+  var IMPORT_SCRIPT = File(base + "/Phase2_Import.jsx").fsName;
+  var ENGINE_NAME = IS_WINDOWS ? "smart_trapper_b1.exe" : "smart_trapper_b1";
 
-  // IMPORTANT: point directly to your engine build output (no copying exe)
-  var TRAPPER_EXE = "C:\\Users\\Valued Customer\\Desktop\\trapper\\SmartTrapperB1\\engine\\target\\release\\smart_trapper_b1.exe";
+  function quoteForCmd(s){
+    return '"' + String(s).replace(/"/g, '""') + '"';
+  }
+
+  function quoteForSh(s){
+    return "'" + String(s).replace(/'/g, "'\"'\"'") + "'";
+  }
+
+  function cTID(s){ return charIDToTypeID(s); }
+
+  function hasSelection(doc){
+    try { doc.selection.bounds; return true; } catch(e){ return false; }
+  }
+
+  function selectTransparencyOfActiveLayer(){
+    var idChnl = cTID("Chnl");
+    var refSel = new ActionReference();
+    refSel.putProperty(idChnl, cTID("fsel"));
+    var refTrsp = new ActionReference();
+    refTrsp.putEnumerated(idChnl, idChnl, cTID("Trsp"));
+    var desc = new ActionDescriptor();
+    desc.putReference(cTID("null"), refSel);
+    desc.putReference(cTID("T   "), refTrsp);
+    executeAction(cTID("setd"), desc, DialogModes.NO);
+  }
+
+  function selectLayerShapeBestEffort(doc){
+    doc.selection.deselect();
+    try { selectTransparencyOfActiveLayer(); if(hasSelection(doc)) return true; } catch(e){}
+    doc.selection.deselect();
+    return false;
+  }
+
+  function findTopArtLayer(doc){
+    for(var i=0;i<doc.layers.length;i++){
+      if(doc.layers[i].typename === "ArtLayer") return doc.layers[i];
+    }
+    return null;
+  }
+
+  function knockOutTopKeyFromColorLayers(doc){
+    var keyLayer = findTopArtLayer(doc);
+    var oldActive = doc.activeLayer;
+    var keyMask = null;
+    var changed = 0;
+
+    if(!keyLayer) throw new Error("Could not find a top ArtLayer to use as KEY.");
+
+    try{
+      app.activeDocument = doc;
+      doc.activeLayer = keyLayer;
+      if(!selectLayerShapeBestEffort(doc)){
+        throw new Error("Could not build key selection from top layer '" + keyLayer.name + "'");
+      }
+
+      keyMask = doc.channels.add();
+      keyMask.name = "__TMP_KEY_KNOCKOUT__";
+      doc.selection.store(keyMask, SelectionType.REPLACE);
+      doc.selection.deselect();
+
+      for(var i=0; i<doc.layers.length - 1; i++){
+        var layer = doc.layers[i];
+        if(layer.typename !== "ArtLayer") continue;
+        if(layer === keyLayer) continue;
+        if(!layer.visible) continue;
+
+        doc.activeLayer = layer;
+        doc.selection.deselect();
+        doc.selection.load(keyMask, SelectionType.REPLACE);
+        if(!hasSelection(doc)) continue;
+        doc.selection.clear();
+        changed++;
+        doc.selection.deselect();
+      }
+    } finally {
+      try { doc.selection.deselect(); } catch(e0){}
+      try { if(keyMask) keyMask.remove(); } catch(e1){}
+      try { doc.activeLayer = oldActive; } catch(e2){}
+    }
+
+    return { keyLayerName: keyLayer.name, changedCount: changed };
+  }
+
+  function chooseEngineExecutable(initialPath){
+    var candidate = new File(initialPath);
+    if(candidate.exists) return candidate.fsName;
+
+    var picked = File.openDialog(
+      "Select the Smart Trapper engine executable (" + ENGINE_NAME + ")",
+      function(f){
+        if(!(f instanceof File)) return false;
+        return f.name === ENGINE_NAME;
+      }
+    );
+    return picked ? picked.fsName : null;
+  }
+
+  // Prefer engine build output relative to this bundle, with file-picker fallback.
+  var TRAPPER_EXE = chooseEngineExecutable(base + "/SmartTrapperB1/engine/target/release/" + ENGINE_NAME);
+  if (!TRAPPER_EXE) { alert("Engine executable not found."); return; }
+
+  function runEngine(jobFolder, trapPx, enginePath, trapperLogPath, errLvlPath, scriptPath){
+    var script = new File(scriptPath);
+    if(script.exists){
+      try { script.remove(); } catch(e0){}
+    }
+
+    if(IS_WINDOWS){
+      if(!script.open("w")) throw new Error("Cannot write runner script: " + script.fsName);
+      script.writeln("@echo off");
+      script.writeln("echo RUNNING> " + quoteForCmd(trapperLogPath));
+      script.writeln(quoteForCmd(enginePath) + " " + quoteForCmd(jobFolder) + " " + trapPx +
+        " 1>>" + quoteForCmd(trapperLogPath) + " 2>>&1");
+      script.writeln("echo ERRORLEVEL:%ERRORLEVEL%>> " + quoteForCmd(trapperLogPath));
+      script.writeln("echo %ERRORLEVEL%> " + quoteForCmd(errLvlPath));
+      script.close();
+      app.system('cmd.exe /c ""' + script.fsName + '""');
+      return;
+    }
+
+    if(!script.open("w")) throw new Error("Cannot write runner script: " + script.fsName);
+    script.writeln("#!/bin/sh");
+    script.writeln("echo RUNNING > " + quoteForSh(trapperLogPath));
+    script.writeln(quoteForSh(enginePath) + " " + quoteForSh(jobFolder) + " " + trapPx +
+      " 1>>" + quoteForSh(trapperLogPath) + " 2>&1");
+    script.writeln("status=$?");
+    script.writeln("echo ERRORLEVEL:$status >> " + quoteForSh(trapperLogPath));
+    script.writeln("echo $status > " + quoteForSh(errLvlPath));
+    script.close();
+    app.system("/bin/sh " + quoteForSh(script.fsName));
+  }
 
   if (!app.documents.length) { alert("Open PSD first."); return; }
   var doc = app.activeDocument;
@@ -44,6 +175,32 @@ app.bringToFront();
       "(keeps intentional overlaps; traps outer boundary only)"
     );
     $.global.PHASE2_MODE = okPlates ? "plates" : "overprint";
+  }
+
+  var fullDebug = confirm(
+    "Do you want full debug logging?\n\n" +
+    "Yes = verbose debug log (slower)\n" +
+    "No = normal log (faster)"
+  );
+  $.global.PHASE2_FULL_DEBUG = (fullDebug === true);
+
+  var doKeyKnockout = confirm(
+    "Do you want to cut the top key layer out of all other visible color layers?\n\n" +
+    "Yes = knock out the top layer before export/trapping\n" +
+    "No = leave the color layers unchanged"
+  );
+  if(doKeyKnockout){
+    try{
+      var knockoutInfo = knockOutTopKeyFromColorLayers(doc);
+      alert(
+        "Key knockout applied.\n\n" +
+        "Key layer: " + knockoutInfo.keyLayerName + "\n" +
+        "Layers changed: " + knockoutInfo.changedCount
+      );
+    } catch(eKey){
+      alert("Key knockout failed.\n\n" + eKey);
+      return;
+    }
   }
 
   $.global.PHASE2_DO_CLEAN = false;
@@ -127,26 +284,17 @@ app.bringToFront();
   var exeFile = new File(TRAPPER_EXE);
   if (!exeFile.exists) { alert("TRAPPER_EXE not found:\n" + TRAPPER_EXE); return; }
 
-  var trapperLogPath = jobFolder + "\\trapper_log.txt";
-  var errLvlPath     = jobFolder + "\\errorlevel.txt";
-  var batPath        = jobFolder + "\\run_trapper.bat";
+  var trapperLogPath = new File(jobFolder + "/trapper_log.txt").fsName;
+  var errLvlPath     = new File(jobFolder + "/errorlevel.txt").fsName;
+  var runnerPath     = new File(jobFolder + (IS_WINDOWS ? "/run_trapper.bat" : "/run_trapper.sh")).fsName;
 
   try { var a = new File(trapperLogPath); if (a.exists) a.remove(); } catch(e1){}
   try { var b = new File(errLvlPath);     if (b.exists) b.remove(); } catch(e2){}
-  try { var c = new File(batPath);        if (c.exists) c.remove(); } catch(e3){}
+  try { var c = new File(runnerPath);     if (c.exists) c.remove(); } catch(e3){}
 
-  var bat = new File(batPath);
-  bat.open("w");
-  bat.writeln("@echo off");
-  bat.writeln("echo RUNNING> \"" + trapperLogPath + "\"");
-  bat.writeln("\"" + TRAPPER_EXE + "\" \"" + jobFolder + "\" " + trapPx + " 1>>\"" + trapperLogPath + "\" 2>>&1");
-  bat.writeln("echo ERRORLEVEL:%ERRORLEVEL%>> \"" + trapperLogPath + "\"");
-  bat.writeln("echo %ERRORLEVEL%> \"" + errLvlPath + "\"");
-  bat.close();
+  runEngine(jobFolder, trapPx, TRAPPER_EXE, trapperLogPath, errLvlPath, runnerPath);
 
-  app.system('cmd.exe /c ""' + batPath + '""');
-
-  var trapsCheck = new File(jobFolder + "\\traps.json");
+  var trapsCheck = new File(jobFolder + "/traps.json");
   if (!trapsCheck.exists) {
     alert("Rust did not generate traps.json.\n\nCheck:\n" + trapperLogPath + "\n" + errLvlPath);
     return;
