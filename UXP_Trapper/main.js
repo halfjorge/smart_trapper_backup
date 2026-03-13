@@ -631,8 +631,9 @@ function createController(rootNode) {
     }
   }
 
-  async function scaleTargetLayerPercent(scalePercent, commandName) {
-    const pct = Number(scalePercent || 100);
+  async function scaleTargetLayerPercent(scalePercentX, scalePercentY, commandName) {
+    const pctX = Number(scalePercentX || 100);
+    const pctY = Number(scalePercentY == null ? scalePercentX : scalePercentY);
     return await core.executeAsModal(async () => {
       return await action.batchPlay(
         [{
@@ -644,9 +645,9 @@ function createController(rootNode) {
             horizontal: { _unit: "pixelsUnit", _value: 0 },
             vertical: { _unit: "pixelsUnit", _value: 0 }
           },
-          width: { _unit: "percentUnit", _value: pct },
-          height: { _unit: "percentUnit", _value: pct },
-          linked: true,
+          width: { _unit: "percentUnit", _value: pctX },
+          height: { _unit: "percentUnit", _value: pctY },
+          linked: false,
           _options: { dialogOptions: "dontDisplay" }
         }],
         {}
@@ -748,11 +749,12 @@ function createController(rootNode) {
       " centerDy=" + centerDy0.toFixed(2);
 
     if (shouldScale) {
-      const scalePct = ((widthRatio + heightRatio) / 2) * 100;
-      const scaleResult = await scaleTargetLayerPercent(scalePct, "Align Placed Layer Scale");
+      const scalePctX = widthRatio * 100;
+      const scalePctY = heightRatio * 100;
+      const scaleResult = await scaleTargetLayerPercent(scalePctX, scalePctY, "Align Placed Layer Scale");
       if (!batchPlayResultHasError(scaleResult)) {
         aligned = true;
-        note += " | scaleFix=" + scalePct.toFixed(4) + "%";
+        note += " | scaleFix=(" + scalePctX.toFixed(4) + "%," + scalePctY.toFixed(4) + "%)";
         placedBefore = await getTargetLayerBoundsPx();
       } else {
         note += " | scaleFixFailed";
@@ -1092,11 +1094,12 @@ function createController(rootNode) {
       }
 
       if (shouldFixScale) {
-        const scalePct = ((widthRatio + heightRatio) / 2) * 100;
-        const scaleResult = await scaleTargetLayerPercent(scalePct, "Fix CLEAN Placed Scale");
+        const scalePctX = widthRatio * 100;
+        const scalePctY = heightRatio * 100;
+        const scaleResult = await scaleTargetLayerPercent(scalePctX, scalePctY, "Fix CLEAN Placed Scale");
         if (!batchPlayResultHasError(scaleResult)) {
           placedBoundsBefore = await getTargetLayerBoundsPx();
-          placementFixNote += " | scaleFix=" + scalePct.toFixed(4) + "%";
+          placementFixNote += " | scaleFix=(" + scalePctX.toFixed(4) + "%," + scalePctY.toFixed(4) + "%)";
         } else {
           placementFixNote += " | scaleFixFailed";
         }
