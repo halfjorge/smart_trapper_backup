@@ -1159,10 +1159,6 @@ function createController(rootNode) {
 
           try { await deselectSelection(); } catch (e) {}
 
-          if (cleanMaskLayerId) {
-            try { await deleteLayerById(cleanMaskLayerId, "Delete CLEAN Mask Temp Layer"); } catch (e) {}
-          }
-
           try {
             await setLayerVisibilityById(originalLayerId, false, "Hide Original Source Layer");
           } catch (e) {}
