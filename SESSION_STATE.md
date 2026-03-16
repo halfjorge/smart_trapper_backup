@@ -1,82 +1,69 @@
 # Smart Trapper Session State
 
-Last updated: 2026-03-12 (America/New_York)  
-Branch: `testing2_26_26`  
+Last updated: 2026-03-16 (America/New_York)  
+Branch: `trapper_active`  
 Repo root: `C:\Users\Valued Customer\Desktop\trapper`
 
-## What This File Is For
-This file is the handoff/source-of-truth so a new chat can resume quickly even if thread history is lost.
+## Purpose
+This file is a concise resume point for a new Codex chat so it can immediately continue debugging and feature work.
 
-## Current Architecture
-- Photoshop UI: UXP panel (`UXP_Trapper/main.js`)
-- Local bridge service: Python HTTP server (`UXP_Trapper/real_bridge.py`)
-- Trap engine: Rust binary (`SmartTrapperB1/engine/target/release/smart_trapper_b1.exe`)
-- Art workflow: Export masks -> run engine -> prepare import structure -> build import plan -> import traps
+## System Layout
+- Legacy JSX pipeline:
+  - `Phase2_Run_All.jsx`
+  - `Phase2_Export.jsx`
+  - `Phase2_Import.jsx`
+- UXP pipeline:
+  - Panel/UI and Photoshop logic: `UXP_Trapper/main.js`
+  - Bridge service: `UXP_Trapper/real_bridge.py`
+  - Engine: `SmartTrapperB1/engine/src/main.rs`
 
-## Current Known Good Workflow
-1. Start bridge in PowerShell:
+## Primary Workflow (UXP)
+1. Start bridge:
    - `cd C:\Users\Valued Customer\Desktop\trapper\UXP_Trapper`
    - `python .\real_bridge.py`
-2. In Photoshop UXP panel:
+2. In Photoshop panel:
    - `Run Trapper`
    - `Prepare Import Structure`
    - `Build Import Plan`
    - `Import Traps`
-3. Use `Save Status Snapshot` after each phase when troubleshooting.
+3. Use `Save Status Snapshot` after major actions.
 
-## Persistent Paths (defaults in panel)
+## Stable Defaults
 - Job folder base:
   - `C:\Users\Valued Customer\Desktop\TrapJobs`
-- Status snapshot folder:
+- Status logs:
   - `C:\Users\Valued Customer\Desktop\trapper\UXP_Trapper\status_logs`
 
-## Recent Stability Work
-- Added bridge telemetry in `real_bridge.py`:
-  - `sessionId`, `pid`, `startedAt`, `uptimeSec`, `requestCount` on `/health`
-  - per-request `requestId` for `/run`
-  - append-only service log:
-    - `UXP_Trapper/real_bridge_service.log`
-  - richer run snapshot metadata in:
-    - `UXP_Trapper/real_bridge_last_run.json`
-- Panel now logs bridge health preflight and run HTTP status in `main.js` before/after `Run Trapper`.
+## Current Status
+- `Prepare Import Structure` can build CLEAN layers successfully when `mask_colors.json` exists in selected run folder.
+- CLEAN path currently uses `engine-clean-mask-alpha` and applies edge bias in prepare path.
+- A flattened hidden snapshot layer workflow has been used in recent iterations (`__ORIGINAL_FLATTENED__`), but this can influence index assumptions if not excluded.
 
-## Active Problem Areas
-- Intermittent behavior can look like placement drift or phase inconsistency until bridge is restarted.
-- Clean/trap coordinate regressions have historically correlated with:
-  - stale bridge process/session
-  - DPI normalization experiments
-  - edge-bias-related clean mask generation shifts
+## Important Failure Pattern
+- If `Prepare Import Structure` shows:
+  - `No source color metadata for ...`
+  - `CLEAN built: 0`
+- Then selected/bound job folder likely does not contain the matching `mask_colors.json` for that run.
 
-## Logs to Collect for Any Bug Report
-1. Latest panel status snapshot:
-   - `UXP_Trapper/status_logs/smart_trapper_status_*.txt`
-2. Bridge per-run snapshot:
-   - `UXP_Trapper/real_bridge_last_run.json`
-3. Bridge service timeline:
-   - `UXP_Trapper/real_bridge_service.log`
-4. Job folder artifacts:
-   - `trapper_bridge_log.txt`
+## Logs That Matter
+1. `UXP_Trapper/status_logs/smart_trapper_status_*.txt`
+2. `UXP_Trapper/real_bridge_last_run.json`
+3. `UXP_Trapper/real_bridge_service.log`
+4. Run folder files:
    - `job.json`
    - `mask_colors.json`
    - `traps.json`
+   - `trapper_bridge_log.txt`
 
-## Debug Checklist (Fast)
-1. Confirm `/health` includes `sessionId`, `pid`, `uptimeSec`.
-2. Confirm status snapshot shows bridge health preflight before run payload.
-3. Confirm run response includes `requestId`, `sessionId`, `engineMs`, `bridgeTotalMs`.
-4. Confirm selected job folder is the exact current run folder (timestamped subfolder).
+## Branch and Commit Discipline
+- Active branch for ongoing work: `trapper_active`
+- Keep commits small and scoped.
+- Commit after each verified bugfix.
+- Include one status log path in commit note if fix is debug-related.
 
-## Commit Discipline (for robust history)
-- Commit small checkpoints with focused scope and message.
-- Prefer one commit per bugfix:
-  - `uxp: add bridge session telemetry`
-  - `uxp: fix clean import coordinate guard`
-  - `engine: write PNG DPI metadata`
-- Always attach at least one status snapshot path in commit notes (or PR body) when bug-related.
-
-## Next Recommended Step
-- Reproduce one intermittent run and capture:
-  - latest status snapshot
-  - `real_bridge_last_run.json`
-  - tail of `real_bridge_service.log`
-- Then compare `sessionId/requestId` between health + run to confirm single bridge instance continuity.
+## Immediate Next Steps
+1. Keep validating consistency of:
+   - job folder binding
+   - `mask_colors.json` presence
+   - edge-bias behavior at prepare/import stages
+2. After stability lock, move feature parity from JSX into UXP in controlled increments.

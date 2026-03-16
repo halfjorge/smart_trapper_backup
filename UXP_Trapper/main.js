@@ -372,7 +372,45 @@ function createController(rootNode) {
     currentLogFolderEntry = await tryBindFolderEntryFromPath(s.logFolder);
   }
 
+  function normalizePathLikeText(value) {
+    const text = String(value || "").trim();
+    if (!text || text === "(none selected)") return "";
+    return text.replace(/\//g, "\\");
+  }
+
+  async function ensureCurrentJobFolderEntry() {
+    const displayPath = normalizePathLikeText(els.jobFolderDisplay && els.jobFolderDisplay.textContent);
+    const settingsPath = normalizePathLikeText(getSettings().jobFolder);
+    const wantedPath = displayPath || settingsPath;
+
+    const currentPath = currentJobFolderEntry
+      ? normalizePathLikeText(currentJobFolderEntry.nativePath || currentJobFolderEntry.name)
+      : "";
+
+    if (currentJobFolderEntry && wantedPath && currentPath.toLowerCase() === wantedPath.toLowerCase()) {
+      return currentJobFolderEntry;
+    }
+
+    if (wantedPath) {
+      const rebound = await tryBindFolderEntryFromPath(wantedPath);
+      if (rebound) {
+        currentJobFolderEntry = rebound;
+        try { els.jobFolderDisplay.textContent = rebound.nativePath || rebound.name || wantedPath; } catch (e) {}
+        return currentJobFolderEntry;
+      }
+    }
+
+    return currentJobFolderEntry;
+  }
+
+  function persistSettingsSilently() {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(getSettings()));
+    } catch (e) {}
+  }
+
   async function ensureRunJobFolder(doc) {
+    await ensureCurrentJobFolderEntry();
     if (!currentJobFolderEntry) {
       throw new Error("No job/base folder selected. Create or select a folder first.");
     }
@@ -1142,6 +1180,19 @@ function createController(rootNode) {
             throw new Error("CLEAN mask transparency selection failed\n" + summarizeBatchPlayResult(selectMaskTransparency));
           }
 
+          const edgeBias = Number(getSettings().edgeBiasPx || 0);
+          if (edgeBias > 0) {
+            const ex = await expandSelectionByPixels(edgeBias);
+            if (ex && batchPlayResultHasError(ex)) {
+              appendStatus("  CLEAN mask-alpha edgeBias expand warning:\n" + summarizeBatchPlayResult(ex));
+            }
+          } else if (edgeBias < 0) {
+            const ct = await contractSelectionByPixels(Math.abs(edgeBias));
+            if (ct && batchPlayResultHasError(ct)) {
+              appendStatus("  CLEAN mask-alpha edgeBias contract warning:\n" + summarizeBatchPlayResult(ct));
+            }
+          }
+
           const selectOrigForFill = await selectLayerById(originalLayerId, "Select Source Layer For CLEAN Fill (Mask Alpha)");
           if (batchPlayResultHasError(selectOrigForFill)) {
             throw new Error("Source layer select failed\n" + summarizeBatchPlayResult(selectOrigForFill));
@@ -1176,7 +1227,8 @@ function createController(rootNode) {
               "cleanBuild=method=engine-clean-mask-alpha",
               "cleanMask=" + cleanFileName,
               "alphaThreshold=" + Number(getSettings().alphaThreshold || 0),
-              "edgeBiasPx=" + Number(getSettings().edgeBiasPx || 0)
+              "edgeBiasPx=" + Number(getSettings().edgeBiasPx || 0),
+              "edgeBiasAppliedInPrepare=true"
             ].join(" | ")
           };
         } finally {
@@ -1836,6 +1888,7 @@ function createController(rootNode) {
       }
       currentJobFolderEntry = folder;
       els.jobFolderDisplay.textContent = folder.nativePath || folder.name || "(selected)";
+      persistSettingsSilently();
       setStatus("Job folder selected.\n\n" + els.jobFolderDisplay.textContent);
     } catch (e) {
       setStatus("Job folder selection failed.\n\n" + e);
@@ -1845,6 +1898,7 @@ function createController(rootNode) {
   function clearJobFolder() {
     currentJobFolderEntry = null;
     els.jobFolderDisplay.textContent = "(none selected)";
+    persistSettingsSilently();
     setStatus("Job folder cleared.");
   }
 
@@ -1857,6 +1911,7 @@ function createController(rootNode) {
       }
       currentLogFolderEntry = folder;
       els.logFolderDisplay.textContent = folder.nativePath || folder.name || "(selected)";
+      persistSettingsSilently();
       setStatus("Log folder selected.\n\n" + els.logFolderDisplay.textContent);
     } catch (e) {
       setStatus("Log folder selection failed.\n\n" + e);
@@ -1866,6 +1921,7 @@ function createController(rootNode) {
   function clearLogFolder() {
     currentLogFolderEntry = null;
     els.logFolderDisplay.textContent = "(none selected)";
+    persistSettingsSilently();
     setStatus("Log folder cleared.");
   }
 
@@ -1956,6 +2012,7 @@ function createController(rootNode) {
       return;
     }
 
+    await ensureCurrentJobFolderEntry();
     if (!currentJobFolderEntry) {
       appendStatus("No job folder selected. Select a job folder that contains traps.json.");
       return;
@@ -2074,6 +2131,7 @@ function createController(rootNode) {
       return;
     }
 
+    await ensureCurrentJobFolderEntry();
     if (!currentJobFolderEntry) {
       appendStatus("No job folder selected. Select a completed job folder before importing traps.");
       return;
@@ -2338,6 +2396,8 @@ function createController(rootNode) {
       return;
     }
 
+    await ensureCurrentJobFolderEntry();
+
     const layers = flattenTopLevelLayers(doc);
     if (layers.length < 3) {
       appendStatus("PSD needs at least 3 top-level layers (KEY top, PAPER bottom, colors in between).");
@@ -2429,6 +2489,30 @@ function createController(rootNode) {
     } else if (!currentJobFolderEntry) {
       lines.push("  skipped: no selected job folder");
     } else {
+      const maskColorsEntry = await getEntryByRelativePath(currentJobFolderEntry, "mask_colors.json");
+      if (!maskColorsEntry) {
+        lines.push("  CLEAN aborted: mask_colors.json missing");
+        lines.push("  folder: " + (currentJobFolderEntry.nativePath || currentJobFolderEntry.name || "(selected)"));
+        lines.push("  action: run 'Run Trapper' first for this job folder");
+        lines.push("  CLEAN built: 0");
+        lines.push("  CLEAN skipped: 0");
+        cleanPlacementOffset = null;
+        lines.push("  CLEAN global placement offset for trap import: disabled (in-document CLEAN build)");
+        const descriptorDump = await getLayerDescriptorDump();
+        lines.push("");
+        lines.push("Prepare import structure complete.");
+        lines.push("Wrapped into COLOR__ groups: " + wrapped);
+        lines.push("Skipped layers: " + skipped);
+        lines.push("");
+        lines.push("Post-wrap descriptor dump:");
+        for (let i = 0; i < descriptorDump.length; i += 1) {
+          const item = descriptorDump[i];
+          lines.push("  [" + item.index + "] " + item.name + " | layerSection=" + item.layerSection);
+        }
+        appendStatus(lines.join("\n"));
+        return;
+      }
+
       const maskColors = await readOptionalJsonFile(currentJobFolderEntry, "mask_colors.json") || {};
       let cleanBuilt = 0;
       let cleanSkipped = 0;
