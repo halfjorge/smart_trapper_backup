@@ -115,6 +115,7 @@ function panelMarkup() {
       <div class="panel">
         <div class="section-title">Actions</div>
         <button id="runBtn" class="button primary full">Run Trapper</button>
+        <button id="manualKnockoutBtn" class="button secondary full">Manual Progressive Knockout</button>
         <button id="exportMasksBtn" class="button secondary full">Export Masks To Job Folder</button>
         <button id="prepareImportBtn" class="button secondary full">Prepare Import Structure</button>
         <button id="importPlanBtn" class="button secondary full">Build Import Plan</button>
@@ -171,6 +172,7 @@ function createController(rootNode) {
       "testBridgeBtn",
       "saveSettingsBtn",
       "runBtn",
+      "manualKnockoutBtn",
       "exportMasksBtn",
       "prepareImportBtn",
       "importPlanBtn",
@@ -1130,6 +1132,88 @@ function createController(rootNode) {
     }, { commandName: commandName || (wantVisible ? "Show Layer" : "Hide Layer") });
   }
 
+  async function loadSelectionFromLayerTransparencyById(layerId, commandName) {
+    if (!layerId) throw new Error("Missing layer ID for transparency selection");
+    return await core.executeAsModal(async () => {
+      return await action.batchPlay(
+        [
+          {
+            _obj: "select",
+            _target: [{ _ref: "layer", _id: layerId }],
+            makeVisible: false,
+            _options: { dialogOptions: "dontDisplay" }
+          },
+          {
+            _obj: "set",
+            _target: [{ _ref: "channel", _property: "selection" }],
+            to: { _ref: "channel", _enum: "channel", _value: "transparencyEnum" },
+            _options: { dialogOptions: "dontDisplay" }
+          }
+        ],
+        {}
+      );
+    }, { commandName: commandName || "Load Layer Transparency Selection" });
+  }
+
+  async function clearSelectionOnLayerById(layerId, commandName) {
+    if (!layerId) throw new Error("Missing layer ID for clear");
+    const selectResult = await selectLayerById(layerId, (commandName || "Clear Selection On Layer") + " Select");
+    if (batchPlayResultHasError(selectResult)) {
+      return selectResult;
+    }
+
+    const attempts = [
+      async () => {
+        const doc = app.activeDocument;
+        if (doc && doc.selection && typeof doc.selection.clear === "function") {
+          await doc.selection.clear();
+          return [{ _obj: "clear", method: "dom-selection-clear" }];
+        }
+        throw new Error("dom-selection-clear unavailable");
+      },
+      async () => {
+        return await core.executeAsModal(async () => {
+          return await action.batchPlay(
+            [
+              {
+                _obj: "delete",
+                _options: { dialogOptions: "dontDisplay" }
+              }
+            ],
+            {}
+          );
+        }, { commandName: commandName || "Delete Selected Pixels" });
+      },
+      async () => {
+        return await core.executeAsModal(async () => {
+          return await action.batchPlay(
+            [
+              {
+                _obj: "clear",
+                _options: { dialogOptions: "dontDisplay" }
+              }
+            ],
+            {}
+          );
+        }, { commandName: commandName || "Clear Selected Pixels" });
+      }
+    ];
+
+    let lastErr = null;
+    for (let i = 0; i < attempts.length; i += 1) {
+      try {
+        const result = await attempts[i]();
+        if (!batchPlayResultHasError(result)) {
+          return result;
+        }
+        lastErr = summarizeBatchPlayResult(result);
+      } catch (e) {
+        lastErr = String(e);
+      }
+    }
+    throw new Error("Destination clear failed after all attempts: " + String(lastErr || "unknown"));
+  }
+
   async function createOriginalFlattenedSnapshot(doc) {
     const layers = flattenTopLevelLayers(doc);
     const existingSnapshots = layers.filter((layer) => isOriginalFlattenedSnapshotName(layer && layer.name));
@@ -1170,6 +1254,107 @@ function createController(rootNode) {
 
     await setLayerVisibilityById(snapshotLayerId, false, "Hide Original Flattened Snapshot");
     appendStatus("snapshot hidden: " + ORIGINAL_FLATTENED_LAYER_NAME);
+  }
+
+  async function applyProgressiveKnockoutInPhotoshop(doc) {
+    const inference = getTopLevelEntriesExcludingSnapshot(doc);
+    const layers = inference.entries || [];
+    if (layers.length < 3) {
+      appendStatus("progressive knockout: skipped (not enough top-level layers)");
+      return { applied: false, operations: 0 };
+    }
+
+    const knockable = layers.filter((entry) => {
+      if (!entry || !entry.meta) return false;
+      if (!entry.meta.visible) return false;
+      if (entry.meta.kind === "group") return false;
+      return true;
+    });
+
+    if (knockable.length < 3) {
+      appendStatus("progressive knockout: skipped (need key, at least one color, and paper)");
+      return { applied: false, operations: 0 };
+    }
+
+    const paper = knockable[knockable.length - 1];
+    let operations = 0;
+    appendStatus("progressive knockout: Photoshop-side knockout start");
+    appendStatus("  paper preserved: " + paper.meta.name);
+
+    try {
+        for (let sourceIdx = 0; sourceIdx < knockable.length - 1; sourceIdx += 1) {
+          const source = knockable[sourceIdx];
+          const sourceId = Number(layerIdOf(source && source.layer) || 0);
+          if (!sourceId) continue;
+
+          for (let destIdx = sourceIdx + 1; destIdx < knockable.length - 1; destIdx += 1) {
+            const dest = knockable[destIdx];
+            const destId = Number(layerIdOf(dest && dest.layer) || 0);
+            if (!destId) continue;
+
+          const selectResult = await loadSelectionFromLayerTransparencyById(
+            sourceId,
+            "Load Progressive Knockout Source Selection"
+          );
+          if (batchPlayResultHasError(selectResult)) {
+            throw new Error(
+              "progressive knockout selection failed for " +
+              source.meta.name + " -> " + dest.meta.name + "\n" +
+              summarizeBatchPlayResult(selectResult)
+            );
+          }
+
+          const clearResult = await clearSelectionOnLayerById(
+            destId,
+            "Progressive Knockout Clear Underlying Layer"
+          );
+          if (batchPlayResultHasError(clearResult)) {
+            throw new Error(
+              "progressive knockout clear failed for " +
+              source.meta.name + " -> " + dest.meta.name + "\n" +
+              summarizeBatchPlayResult(clearResult)
+            );
+          }
+
+          operations += 1;
+          appendStatus("  knocked out: " + source.meta.name + " -> " + dest.meta.name);
+        }
+      }
+    } finally {
+      try { await deselectSelection(); } catch (e) {}
+    }
+
+    appendStatus("progressive knockout: Photoshop-side knockout complete (" + operations + " clears)");
+    return { applied: operations > 0, operations };
+  }
+
+  async function runManualProgressiveKnockout() {
+    try {
+      appendStatus(statusStamp("Manual Progressive Knockout"));
+      let doc = null;
+      try {
+        doc = app.activeDocument;
+      } catch (e) {
+        doc = null;
+      }
+      if (!doc) {
+        throw new Error("No active document. Open a document before running manual progressive knockout.");
+      }
+      const startMs = nowMs();
+      const result = await applyProgressiveKnockoutInPhotoshop(doc);
+      appendStatus(
+        "Manual progressive knockout complete.\n" +
+        "Applied: " + (!!result.applied) + "\n" +
+        "Clears: " + Number(result.operations || 0) + "\n" +
+        "Elapsed ms: " + elapsedMs(startMs) + "\n\n" +
+        "Next step: run 'Run Trapper' normally."
+      );
+    } catch (e) {
+      appendStatus("Manual progressive knockout failed.\n" + String(e));
+      try {
+        if (e && e.stack) appendStatus("Manual progressive knockout stack:\n" + String(e.stack));
+      } catch (stackErr) {}
+    }
   }
 
   async function hideOriginalLayersWhenCleanExists(doc) {
@@ -3109,6 +3294,7 @@ function createController(rootNode) {
     bindActionWithCompletionAlert(els.importPlanBtn, "Build Import Plan", buildImportPlan);
     bindActionWithCompletionAlert(els.importTrapsBtn, "Import Traps", importTraps);
     els.saveStatusBtn.addEventListener("click", saveStatusToFile);
+    bindActionWithCompletionAlert(els.manualKnockoutBtn, "Manual Progressive Knockout", runManualProgressiveKnockout);
     bindActionWithCompletionAlert(els.runBtn, "Run Trapper", runTrapper);
   }
 

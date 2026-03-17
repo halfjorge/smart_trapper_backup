@@ -1,6 +1,6 @@
 # Smart Trapper Session State
 
-Last updated: 2026-03-16 (America/New_York)  
+Last updated: 2026-03-17 (America/New_York)  
 Branch: `trapper_active`  
 Repo root: `C:\Users\Valued Customer\Desktop\trapper`
 
@@ -22,6 +22,7 @@ This file is a concise resume point for a new Codex chat so it can immediately c
    - `cd C:\Users\Valued Customer\Desktop\trapper\UXP_Trapper`
    - `python .\real_bridge.py`
 2. In Photoshop panel:
+   - optionally `Manual Progressive Knockout` first for non-knocked-out files
    - `Run Trapper`
    - `Prepare Import Structure`
    - `Build Import Plan`
@@ -35,15 +36,21 @@ This file is a concise resume point for a new Codex chat so it can immediately c
   - `C:\Users\Valued Customer\Desktop\trapper\UXP_Trapper\status_logs`
 
 ## Current Status
-- `Prepare Import Structure` can build CLEAN layers successfully when `mask_colors.json` exists in selected run folder.
-- CLEAN path currently uses `engine-clean-mask-alpha` and applies edge bias in prepare path.
-- A flattened hidden snapshot layer workflow has been used in recent iterations (`__ORIGINAL_FLATTENED__`), but this can influence index assumptions if not excluded.
+- `Run Trapper` creates/refreshes hidden `__ORIGINAL_FLATTENED__` and excludes it from inference/grouping.
+- `Prepare Import Structure` can build CLEAN layers successfully from `clean_masks/*.png` when the selected run folder matches the run.
+- If `clean_masks/` is missing in the selected run folder, prepare falls back to in-document alpha-threshold CLEAN build.
+- `Manual Progressive Knockout` now works and performs the manual top-down knockout sequence before trapping when needed.
+- Current verified manual knockout success log:
+  - `UXP_Trapper/status_logs/smart_trapper_status_2026-03-17T17-51-11-771Z.txt`
+  - `Applied: true`
+  - `Clears: 10`
 
 ## Important Failure Pattern
 - If `Prepare Import Structure` shows:
   - `No source color metadata for ...`
   - `CLEAN built: 0`
 - Then selected/bound job folder likely does not contain the matching `mask_colors.json` for that run.
+- If `Prepare Import Structure` shows `CLEAN mask-alpha path fallback (...)`, the selected run folder is missing `clean_masks/` and prepare is using the older in-document CLEAN fallback.
 
 ## Logs That Matter
 1. `UXP_Trapper/status_logs/smart_trapper_status_*.txt`
@@ -62,8 +69,9 @@ This file is a concise resume point for a new Codex chat so it can immediately c
 - Include one status log path in commit note if fix is debug-related.
 
 ## Immediate Next Steps
-1. Keep validating consistency of:
+1. Validate the separate `Manual Progressive Knockout` button across more files that are not already progressively knocked out.
+2. Keep validating consistency of:
    - job folder binding
-   - `mask_colors.json` presence
+   - `mask_colors.json` and `clean_masks/` presence
    - edge-bias behavior at prepare/import stages
-2. After stability lock, move feature parity from JSX into UXP in controlled increments.
+3. After stability lock, move feature parity from JSX into UXP in controlled increments.

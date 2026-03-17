@@ -1,6 +1,6 @@
 # Smart Trapper Handbook
 
-Last updated: 2026-03-16  
+Last updated: 2026-03-17  
 Repository root: `C:\Users\Valued Customer\Desktop\trapper`  
 Primary branch: `trapper_active`
 
@@ -37,6 +37,8 @@ Role:
 - In-Photoshop control surface.
 - Orchestrates export -> bridge run -> import actions.
 - Stores settings and produces status snapshots.
+- Creates a hidden original flattened snapshot layer.
+- Supports a separate manual progressive knockout action before trapping.
 
 ### Bridge
 - `UXP_Trapper/real_bridge.py`
@@ -69,6 +71,7 @@ Important run artifacts:
 - `traps.json`
 - `trapper_bridge_log.txt`
 - `uxp_job_request.json`
+- hidden PSD reference layer: `__ORIGINAL_FLATTENED__`
 
 ## 4) Layer Model Expectations
 
@@ -86,10 +89,19 @@ Expected import structure:
 ## 5) Core UXP Actions
 
 ### Run Trapper
+- Creates or refreshes hidden `__ORIGINAL_FLATTENED__` at the top of the stack.
 - Exports masks and metadata.
 - Calls bridge `/run`.
 - Rebinds selected run folder when bridge returns job path.
 - Verifies `mask_colors.json` presence.
+
+### Manual Progressive Knockout
+- Separate UXP action button.
+- Mimics manual Photoshop prep:
+  - ctrl-click top visible art layer
+  - delete that selection out of each lower visible art layer except paper
+  - repeat top-down until all non-paper layers are progressively knocked out
+- Use this on files that are not already progressively knocked out before running `Run Trapper`.
 
 ### Prepare Import Structure
 - Wraps eligible layers into `COLOR__` groups.
@@ -122,6 +134,11 @@ Expected import structure:
 - Must only help shared-color boundaries and avoid introducing visible artifacts at paper edges.
 - Requires strict verification against output examples.
 
+5. Input prep state
+- Some files are already progressively knocked out.
+- Some files are stacked with overlaps intact.
+- These states behave differently; use `Manual Progressive Knockout` on the latter before trapping.
+
 ## 7) Recent Work Themes (Migration Timeline)
 
 - Built and stabilized UXP panel layout/workflow.
@@ -129,6 +146,7 @@ Expected import structure:
 - Added folder defaults (job base + log folder).
 - Added completion alerts for long-running actions.
 - Added flattened snapshot layer behavior for debugging/reference.
+- Added working manual progressive knockout action in UXP, separate from normal `Run Trapper`.
 - Iteratively fixed:
   - trap/clean placement drift
   - smart object/layer effect import artifacts
@@ -147,9 +165,10 @@ Then correlate with:
 
 Minimum reproducibility packet:
 1. exact settings used (alpha threshold, edge bias, trap width, mode)
-2. latest status snapshot
-3. latest bridge run snapshot
-4. screenshot of resulting layer stack and artifact region
+2. whether `Manual Progressive Knockout` was run first
+3. latest status snapshot
+4. latest bridge run snapshot
+5. screenshot of resulting layer stack and artifact region
 
 ## 9) Operational Commands
 
@@ -188,6 +207,6 @@ When behavior is unstable:
 ## 12) Next Priorities
 
 1. Lock reliability of CLEAN and TRAP placement across varied files.
-2. Lock edge-bias behavior so it improves gaps without introducing paper-edge artifacts.
-3. Continue JSX parity feature-by-feature only after each behavior is stable.
-
+2. Validate manual progressive knockout across more non-knocked-out files.
+3. Lock edge-bias behavior so it improves gaps without introducing paper-edge artifacts.
+4. Continue JSX parity feature-by-feature only after each behavior is stable.

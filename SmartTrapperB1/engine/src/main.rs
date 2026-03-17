@@ -486,15 +486,16 @@ fn main()->Result<()>{
     if kw!=w||kh!=h{ anyhow::bail!("key mask size mismatch"); }
     let key_mask=alpha_to_bit_with_threshold(w,h,&key_rgba,alpha_threshold);
     let key_cover_mask=alpha_to_bit_nonzero(w,h,&key_rgba);
+    let working_color_masks=raw_color_masks.clone();
 
-    for i in 0..raw_color_masks.len(){
-        let color_name=raw_color_masks[i].0.clone();
-        let mut plate=raw_color_masks[i].1.clone();
+    for i in 0..working_color_masks.len(){
+        let color_name=working_color_masks[i].0.clone();
+        let mut plate=working_color_masks[i].1.clone();
         if use_cleanup && edge_bias_px!=0.0{
             let mut others_union=vec![0u8;n];
-            for j in 0..raw_color_masks.len(){
+            for j in 0..working_color_masks.len(){
                 if i==j{ continue; }
-                let om=&raw_color_masks[j].1;
+                let om=&working_color_masks[j].1;
                 for k in 0..n{
                     if om[k]!=0{ others_union[k]=1; }
                 }

@@ -15,6 +15,8 @@ This is the start of a real UXP rewrite track for the trapper workflow. It does 
 - Bridge health check and run payload generation
 - Settings snapshot export
 - Optional mock bridge for local panel testing
+- Hidden `__ORIGINAL_FLATTENED__` snapshot layer on `Run Trapper`
+- Separate `Manual Progressive Knockout` action that mimics top-down manual knockout before trapping
 
 ## What is not wired yet
 
@@ -70,6 +72,14 @@ The panel can now do the first real export-side pass from the active Photoshop d
    - click `Export Masks To Job Folder`, or
    - click `Run Trapper` to export masks and immediately call the real bridge
 
+Optional prep step for overlapping files:
+
+- Click `Manual Progressive Knockout` first if the file is not already knocked out top-to-bottom.
+- This performs the same workflow as:
+  - ctrl-click top layer
+  - delete that selection from each lower visible art layer except paper
+  - repeat down the stack
+
 If the selected folder is a base folder rather than an existing job folder, the panel now creates a timestamped job subfolder automatically before export/run.
 
 That currently writes:
@@ -84,6 +94,7 @@ Important limitation:
 - this first UXP export pass writes isolated layer PNGs directly to `masks/`
 - cleanup parity and key-cut parity are not yet ported from the JSX pipeline
 - trap import back into Photoshop is not yet ported
+- manual knockout is separate from `Run Trapper`; it mutates the open PSD before export just like a manual prep step would
 
 ## Current UXP import-side planning flow
 
