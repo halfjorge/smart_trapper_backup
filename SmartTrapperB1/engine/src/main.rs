@@ -4,11 +4,12 @@ use std::fs::File;
 use std::io::BufWriter;
 use png::{BitDepth, ColorType, Encoder, PixelDimensions, Unit};
 use serde::{Deserialize, Serialize};
-use std::collections::{HashMap, VecDeque};
+use std::collections::VecDeque;
 use std::fs;
 use std::path::{Path, PathBuf};
 
 fn default_tolerance() -> u32 { 5 }
+fn default_key_trap_pullback() -> u32 { 1 }
 
 #[derive(Parser, Debug)]
 #[command(name="smart_trapper_b1", about="Phase 2 trapper (spread-only + paper island removal)")]
@@ -38,6 +39,9 @@ struct JobFile {
 
     #[serde(default)]
     edgeBiasPx: f32,
+
+    #[serde(default="default_key_trap_pullback")]
+    keyTrapPullbackPx: u32,
 
     keyLayerName: String,
     paperLayerName: String,
@@ -91,6 +95,14 @@ fn alpha_to_bit_with_threshold(w:u32,h:u32,rgba:&[u8],alpha_threshold:u32)->Vec<
     let threshold=alpha_threshold.min(255) as u8;
     for i in 0..(w*h)as usize{
         out[i]=if rgba[i*4+3]>=threshold{1}else{0};
+    }
+    out
+}
+
+fn alpha_to_bit_nonzero(w:u32,h:u32,rgba:&[u8])->Vec<u8>{
+    let mut out=vec![0u8;(w*h)as usize];
+    for i in 0..(w*h)as usize{
+        out[i]=if rgba[i*4+3]>0{1}else{0};
     }
     out
 }
@@ -178,6 +190,34 @@ fn dilate_n(mut mask:Vec<u8>,w:u32,h:u32,steps:u32)->Vec<u8>{
         mask=dilate(&mask,w,h);
     }
     mask
+}
+
+fn erode_n(mut mask:Vec<u8>,w:u32,h:u32,steps:u32)->Vec<u8>{
+    for _ in 0..steps{
+        mask=erode(&mask,w,h);
+    }
+    mask
+}
+
+fn pair_boundary_seed(a:&[u8],b:&[u8],w:u32,h:u32)->Vec<u8>{
+    let mut seed=vec![0u8;(w*h)as usize];
+    for y in 0..h as i32{
+        for x in 0..w as i32{
+            let idx=(y as u32*w+x as u32)as usize;
+            if a[idx]==0{ continue; }
+            for (dx,dy) in dirs8(){
+                let nx=x+dx;
+                let ny=y+dy;
+                if nx<0||ny<0||nx>=w as i32||ny>=h as i32{continue;}
+                let nidx=(ny as u32*w+nx as u32)as usize;
+                if b[nidx]!=0{
+                    seed[idx]=1;
+                    break;
+                }
+            }
+        }
+    }
+    seed
 }
 
 fn constrained_dilate(mask:&[u8],allow:&[u8],block:&[u8],w:u32,h:u32)->Vec<u8>{
@@ -314,9 +354,9 @@ fn apply_edge_bias_key_constrained(
         return apply_edge_bias_f32(mask,w,h,edge_bias_px);
     }
 
-    // Only permit cleanup growth in/near key regions so artwork interiors don't swell.
-    let allow_radius=edge_bias_px.ceil().max(1.0) as u32;
-    let allow_mask=dilate_n(key_mask.to_vec(),w,h,allow_radius+1);
+    // Only permit cleanup growth inside actual key coverage.
+    // Do not allow edge bias to expand into paper around the key edge.
+    let allow_mask=key_mask.to_vec();
 
     let whole=edge_bias_px.floor() as i32;
     let frac=edge_bias_px-(whole as f32);
@@ -328,6 +368,12 @@ fn apply_edge_bias_key_constrained(
     if min_neighbors<=8{
         mask=constrained_selective_dilate(&mask,&allow_mask,other_colors_union,w,h,min_neighbors);
     }
+
+    // A narrow under-key heal pass helps close tiny white seams without allowing
+    // cleanup growth out into paper. This restores the useful effect of the old
+    // second bias pass, but keeps it key-constrained inside the engine.
+    mask=constrained_selective_dilate(&mask,&allow_mask,other_colors_union,w,h,3);
+
     mask
 }
 
@@ -416,6 +462,7 @@ fn main()->Result<()>{
         1
     };
     let edge_bias_px=if use_cleanup { job.edgeBiasPx } else { 0.0 };
+    let key_trap_pullback_px=job.keyTrapPullbackPx;
 
     // Load plates in stack order (bottom -> top).
     // job.colors is exported bottom -> top, then KEY sits above all colors.
@@ -438,6 +485,7 @@ fn main()->Result<()>{
     let (kw,kh,key_rgba)=read_mask_rgba(&job_folder.join(&key_file.png))?;
     if kw!=w||kh!=h{ anyhow::bail!("key mask size mismatch"); }
     let key_mask=alpha_to_bit_with_threshold(w,h,&key_rgba,alpha_threshold);
+    let key_cover_mask=alpha_to_bit_nonzero(w,h,&key_rgba);
 
     for i in 0..raw_color_masks.len(){
         let color_name=raw_color_masks[i].0.clone();
@@ -451,7 +499,7 @@ fn main()->Result<()>{
                     if om[k]!=0{ others_union[k]=1; }
                 }
             }
-            plate=apply_edge_bias_key_constrained(plate,w,h,edge_bias_px,&key_mask,&others_union);
+            plate=apply_edge_bias_key_constrained(plate,w,h,edge_bias_px,&key_cover_mask,&others_union);
         }
         plate_names.push(color_name.clone());
         cleaned_color_masks.push((color_name, plate.clone()));
@@ -486,17 +534,27 @@ fn main()->Result<()>{
 
     let mut out=TrapsOut{traps:vec![]};
 
-    // Pairwise trap rule (legacy-compatible):
-    // Trap(A over B) = (dilate(A, trapPx) & B) & !A
-    // This prevents paper-edge trap islands because target B must actually exist.
+    // Pairwise trap rule (legacy-compatible, boundary-seeded):
+    // Trap(A over B) = (dilate(boundary(A touching B), trapPx) & target_allow) & !A
+    // This prevents traps from "jumping" across paper to reach a target plate.
+    // For key-target traps, also pull back N px from the outside key edge to avoid
+    // butt-registering source traps directly to the paper-facing key boundary.
     for ai in 0..plates.len(){
         let a=&plates[ai];
-        let da=dilate_n(a.clone(),w,h,trap_px as u32);
         for bi in (ai+1)..plates.len(){
             let b=&plates[bi];
+                let boundary_seed=pair_boundary_seed(a,b,w,h);
+                if !any_on(&boundary_seed){continue;}
+                let da=dilate_n(boundary_seed,w,h,trap_px as u32);
+                let target_allow=
+                    if bi==plates.len()-1{
+                    erode_n(b.clone(),w,h,key_trap_pullback_px)
+                }else{
+                    b.clone()
+                };
             let mut trap_mask=vec![0u8;n];
             for i in 0..n{
-                if da[i]!=0 && b[i]!=0 && a[i]==0{
+                if da[i]!=0 && target_allow[i]!=0 && a[i]==0{
                     trap_mask[i]=1;
                 }
             }

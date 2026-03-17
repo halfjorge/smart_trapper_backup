@@ -13,6 +13,7 @@ const DEFAULTS = {
   preflightCleanup: false,
   alphaThreshold: 8,
   edgeBiasPx: 0,
+  keyTrapPullbackPx: 1,
   trapPx: 5,
   mode: "auto",
   bridgeUrl: "http://127.0.0.1:8765",
@@ -63,6 +64,10 @@ function panelMarkup() {
         <div class="field">
           <div class="field-label">Edge bias (px)</div>
           <input id="edgeBiasPx" type="number" step="1">
+        </div>
+        <div class="field">
+          <div class="field-label">Key trap pullback (px)</div>
+          <input id="keyTrapPullbackPx" type="number" min="0" step="1">
         </div>
         <div class="field">
           <div class="field-label">Trap width (px)</div>
@@ -151,6 +156,7 @@ function createController(rootNode) {
       "preflightCleanup",
       "alphaThreshold",
       "edgeBiasPx",
+      "keyTrapPullbackPx",
       "trapPx",
       "mode",
       "bridgeUrlDisplay",
@@ -240,6 +246,7 @@ function createController(rootNode) {
       preflightCleanup: !!els.preflightCleanup.checked,
       alphaThreshold: Number(els.alphaThreshold.value || DEFAULTS.alphaThreshold),
       edgeBiasPx: Number(els.edgeBiasPx.value || DEFAULTS.edgeBiasPx),
+      keyTrapPullbackPx: Number(els.keyTrapPullbackPx.value || DEFAULTS.keyTrapPullbackPx),
       trapPx: Number(els.trapPx.value || DEFAULTS.trapPx),
       mode: els.mode.value || DEFAULTS.mode,
       bridgeUrl: String(els.bridgeUrlDisplay.textContent || DEFAULTS.bridgeUrl).trim(),
@@ -255,6 +262,7 @@ function createController(rootNode) {
     els.preflightCleanup.checked = !!s.preflightCleanup;
     els.alphaThreshold.value = String(s.alphaThreshold);
     els.edgeBiasPx.value = String(s.edgeBiasPx);
+    els.keyTrapPullbackPx.value = String(s.keyTrapPullbackPx);
     els.trapPx.value = String(s.trapPx);
     els.mode.value = s.mode;
     els.bridgeUrlDisplay.textContent = s.bridgeUrl;
@@ -480,6 +488,7 @@ function createController(rootNode) {
         preflightCleanup: !!getSettings().preflightCleanup,
         alphaThreshold: Number(getSettings().alphaThreshold || DEFAULTS.alphaThreshold),
         edgeBiasPx: Number(getSettings().edgeBiasPx || DEFAULTS.edgeBiasPx),
+        keyTrapPullbackPx: Number(getSettings().keyTrapPullbackPx || DEFAULTS.keyTrapPullbackPx),
         keyLayerName: keyLayer ? keyLayer.meta.name : "",
         paperLayerName: paperLayer ? paperLayer.meta.name : "",
         colors: [],
@@ -1180,18 +1189,7 @@ function createController(rootNode) {
             throw new Error("CLEAN mask transparency selection failed\n" + summarizeBatchPlayResult(selectMaskTransparency));
           }
 
-          const edgeBias = Number(getSettings().edgeBiasPx || 0);
-          if (edgeBias > 0) {
-            const ex = await expandSelectionByPixels(edgeBias);
-            if (ex && batchPlayResultHasError(ex)) {
-              appendStatus("  CLEAN mask-alpha edgeBias expand warning:\n" + summarizeBatchPlayResult(ex));
-            }
-          } else if (edgeBias < 0) {
-            const ct = await contractSelectionByPixels(Math.abs(edgeBias));
-            if (ct && batchPlayResultHasError(ct)) {
-              appendStatus("  CLEAN mask-alpha edgeBias contract warning:\n" + summarizeBatchPlayResult(ct));
-            }
-          }
+          appendStatus("  CLEAN mask-alpha edgeBias in prepare: skipped (engine clean mask already includes cleanup bias)");
 
           const selectOrigForFill = await selectLayerById(originalLayerId, "Select Source Layer For CLEAN Fill (Mask Alpha)");
           if (batchPlayResultHasError(selectOrigForFill)) {
@@ -1228,7 +1226,7 @@ function createController(rootNode) {
               "cleanMask=" + cleanFileName,
               "alphaThreshold=" + Number(getSettings().alphaThreshold || 0),
               "edgeBiasPx=" + Number(getSettings().edgeBiasPx || 0),
-              "edgeBiasAppliedInPrepare=true"
+              "edgeBiasAppliedInPrepare=false"
             ].join(" | ")
           };
         } finally {
@@ -2417,6 +2415,7 @@ function createController(rootNode) {
         "Settings: preflightCleanup=" + (!!settings.preflightCleanup) +
         ", alphaThreshold=" + settings.alphaThreshold +
         ", edgeBiasPx=" + settings.edgeBiasPx +
+        ", keyTrapPullbackPx=" + settings.keyTrapPullbackPx +
         ", trapPx=" + settings.trapPx +
         ", mode=" + settings.mode
       );
