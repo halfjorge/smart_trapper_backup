@@ -4,6 +4,7 @@ const { localFileSystem, formats } = require("uxp").storage;
 
 const STORAGE_KEY = "smartTrapperSettings";
 const EXPORT_ENGINE_VERSION = "dom-save-v4-rgb-convert-debug";
+const ORIGINAL_FLATTENED_LAYER_NAME = "__ORIGINAL_FLATTENED__";
 const DEFAULT_JOB_FOLDER = "C:\\Users\\Valued Customer\\Desktop\\TrapJobs";
 const DEFAULT_LOG_FOLDER = "C:\\Users\\Valued Customer\\Desktop\\trapper\\UXP_Trapper\\status_logs";
 
@@ -437,6 +438,32 @@ function createController(rootNode) {
     return out;
   }
 
+  function isOriginalFlattenedSnapshotName(name) {
+    return String(name || "") === ORIGINAL_FLATTENED_LAYER_NAME;
+  }
+
+  function getTopLevelEntriesExcludingSnapshot(doc) {
+    const rawLayers = flattenTopLevelLayers(doc);
+    const entries = [];
+    let snapshotEntry = null;
+    for (let i = 0; i < rawLayers.length; i += 1) {
+      const layer = rawLayers[i];
+      const meta = topLevelLayerMeta(layer, i);
+      const entry = { layer, meta };
+      if (isOriginalFlattenedSnapshotName(meta.name)) {
+        snapshotEntry = entry;
+        continue;
+      }
+      entries.push(entry);
+    }
+    return {
+      rawLayers,
+      entries,
+      snapshotEntry,
+      snapshotExcluded: !!snapshotEntry
+    };
+  }
+
   function topLevelLayerMeta(layer, index) {
     let blendMode = "(unknown)";
     let opacity = 100;
@@ -462,10 +489,8 @@ function createController(rootNode) {
   }
 
   function buildCurrentJobSpec(doc) {
-    const layers = flattenTopLevelLayers(doc).map((layer, index) => ({
-      layer,
-      meta: topLevelLayerMeta(layer, index)
-    }));
+    const inference = getTopLevelEntriesExcludingSnapshot(doc);
+    const layers = inference.entries;
 
     const keyLayer = layers.length ? layers[0] : null;
     const paperLayer = layers.length ? layers[layers.length - 1] : null;
@@ -530,7 +555,8 @@ function createController(rootNode) {
       inferred: {
         topKeyLayer: keyLayer ? keyLayer.meta.name : null,
         bottomPaperLayer: paperLayer ? paperLayer.meta.name : null,
-        visibleColorLayersBottomToTop: colorLayersBottomToTop.map((entry) => entry.meta.name)
+        visibleColorLayersBottomToTop: colorLayersBottomToTop.map((entry) => entry.meta.name),
+        originalFlattenedSnapshotExcluded: inference.snapshotExcluded
       }
     };
   }
@@ -1104,6 +1130,48 @@ function createController(rootNode) {
     }, { commandName: commandName || (wantVisible ? "Show Layer" : "Hide Layer") });
   }
 
+  async function createOriginalFlattenedSnapshot(doc) {
+    const layers = flattenTopLevelLayers(doc);
+    const existingSnapshots = layers.filter((layer) => isOriginalFlattenedSnapshotName(layer && layer.name));
+    for (let i = 0; i < existingSnapshots.length; i += 1) {
+      const snapshotId = layerIdOf(existingSnapshots[i]);
+      if (!snapshotId) continue;
+      await deleteLayerById(snapshotId, "Delete Existing Original Flattened Snapshot");
+      appendStatus("snapshot deleted: " + ORIGINAL_FLATTENED_LAYER_NAME);
+    }
+
+    await core.executeAsModal(async () => {
+      return await action.batchPlay(
+        [{
+          _obj: "mergeVisible",
+          duplicate: true,
+          _options: { dialogOptions: "dontDisplay" }
+        }],
+        {}
+      );
+    }, { commandName: "Create Original Flattened Snapshot" });
+
+    let snapshotLayerId = null;
+    try {
+      const activeLayers = doc.activeLayers || [];
+      if (activeLayers.length > 0) {
+        snapshotLayerId = Number(layerIdOf(activeLayers[0]) || 0) || null;
+      }
+    } catch (e) {}
+    if (!snapshotLayerId) {
+      throw new Error("Snapshot created but active merged layer ID could not be resolved");
+    }
+
+    const renameResult = await renameTargetLayer(ORIGINAL_FLATTENED_LAYER_NAME);
+    if (batchPlayResultHasError(renameResult)) {
+      throw new Error("Snapshot rename failed\n" + summarizeBatchPlayResult(renameResult));
+    }
+    appendStatus("snapshot created: " + ORIGINAL_FLATTENED_LAYER_NAME);
+
+    await setLayerVisibilityById(snapshotLayerId, false, "Hide Original Flattened Snapshot");
+    appendStatus("snapshot hidden: " + ORIGINAL_FLATTENED_LAYER_NAME);
+  }
+
   async function hideOriginalLayersWhenCleanExists(doc) {
     const layers = flattenTopLevelLayers(doc);
     let hidden = 0;
@@ -1443,9 +1511,9 @@ function createController(rootNode) {
 
   function buildTopLevelColorFallbackIndex(doc) {
     const out = {};
-    const layers = flattenTopLevelLayers(doc);
+    const layers = getTopLevelEntriesExcludingSnapshot(doc).entries;
     for (let i = layers.length - 2; i >= 1; i -= 1) {
-      const layer = layers[i];
+      const layer = layers[i] && layers[i].layer;
       if (!layer) continue;
       if (isGroupLikeLayer(layer)) continue;
       if (!layer.visible) continue;
@@ -1834,28 +1902,30 @@ function createController(rootNode) {
       return;
     }
 
-    const layers = flattenTopLevelLayers(doc);
-    const topArtLayer = layers.find((layer) => isArtLikeLayer(layer));
-    const visibleArtLayers = layers.filter((layer) => {
+    const inference = getTopLevelEntriesExcludingSnapshot(doc);
+    const layers = inference.rawLayers;
+    const topArtLayer = inference.entries.find((entry) => isArtLikeLayer(entry.layer));
+    const visibleArtLayers = inference.entries.filter((entry) => {
       try {
-        return layer.visible && isArtLikeLayer(layer);
+        return entry.layer.visible && isArtLikeLayer(entry.layer);
       } catch (e) {
         return false;
       }
     });
-    const blendLayers = detectBlendLikeLayers(layers);
+    const blendLayers = detectBlendLikeLayers(inference.entries.map((entry) => entry.layer));
 
     els.docSummary.textContent =
       "Name: " + doc.title + "\n" +
       "Mode: " + doc.mode + "\n" +
       "Size: " + doc.width + " x " + doc.height + "\n" +
       "Resolution: " + doc.resolution + "\n" +
-      "Top layer used as KEY: " + (topArtLayer ? topArtLayer.name : "(none)");
+      "Top layer used as KEY: " + (topArtLayer ? topArtLayer.meta.name : "(none)");
 
     els.layerSummary.textContent =
       "Top-level layers: " + layers.length + "\n" +
       "Visible art layers: " + visibleArtLayers.length + "\n" +
       "Blend-like layers: " + blendLayers.length + "\n" +
+      "Snapshot excluded from layer inference: " + (inference.snapshotExcluded ? "YES" : "NO") + "\n" +
       (blendLayers.length
         ? "Blend-like names: " + blendLayers.map((layer) => layer.name).join(", ")
         : "Blend-like names: none");
@@ -2396,7 +2466,8 @@ function createController(rootNode) {
 
     await ensureCurrentJobFolderEntry();
 
-    const layers = flattenTopLevelLayers(doc);
+    const inference = getTopLevelEntriesExcludingSnapshot(doc);
+    const layers = inference.entries;
     if (layers.length < 3) {
       appendStatus("PSD needs at least 3 top-level layers (KEY top, PAPER bottom, colors in between).");
       return;
@@ -2409,6 +2480,9 @@ function createController(rootNode) {
     lines.push(statusStamp("Prepare Import Structure"));
     lines.push("");
     lines.push("Preparing import structure...");
+    if (inference.snapshotExcluded) {
+      lines.push("snapshot excluded from layer inference: " + ORIGINAL_FLATTENED_LAYER_NAME);
+    }
     try {
       const settings = getSettings();
       lines.push(
@@ -2437,11 +2511,12 @@ function createController(rootNode) {
     setStatus(lines.join("\n"));
 
     for (let i = layers.length - 2; i >= 1; i -= 1) {
-      const layer = layers[i];
-      if (!layer) continue;
-      const meta = topLevelLayerMeta(layer, i);
+      const entry = layers[i];
+      if (!entry || !entry.layer) continue;
+      const layer = entry.layer;
+      const meta = entry.meta;
       lines.push(
-        "Inspect [" + i + "]: " + meta.name +
+        "Inspect [" + meta.index + "]: " + meta.name +
         " | kind=" + meta.kind +
         " | visible=" + meta.visible
       );
@@ -2692,7 +2767,7 @@ function createController(rootNode) {
 
     if (spec.topLevelLayers.length) {
       exportTargets.push({
-        index: 0,
+        index: Number(spec.topLevelLayers[0].index),
         fileName: "KEY_" + sanitize(spec.topLevelLayers[0].name) + ".png",
         label: "KEY",
         layerName: spec.topLevelLayers[0].name
@@ -2702,10 +2777,10 @@ function createController(rootNode) {
     const colorNames = spec.inferred.visibleColorLayersBottomToTop || [];
     for (let i = 0; i < colorNames.length; i += 1) {
       const layerName = colorNames[i];
-      const topIndex = spec.topLevelLayers.findIndex((layer) => layer.name === layerName);
-      if (topIndex < 0) continue;
+      const topLayerMeta = spec.topLevelLayers.find((layer) => layer.name === layerName);
+      if (!topLayerMeta) continue;
       exportTargets.push({
-        index: topIndex,
+        index: Number(topLayerMeta.index),
         fileName: (i + 1) + "_" + sanitize(layerName) + ".png",
         label: String(i + 1),
         layerName
@@ -2783,7 +2858,7 @@ function createController(rootNode) {
 
     if (spec.topLevelLayers.length) {
       exportTargets.push({
-        index: 0,
+        index: Number(spec.topLevelLayers[0].index),
         fileName: "KEY_" + sanitize(spec.topLevelLayers[0].name) + ".png",
         label: "KEY",
         layerName: spec.topLevelLayers[0].name
@@ -2793,10 +2868,10 @@ function createController(rootNode) {
     const colorNames = spec.inferred.visibleColorLayersBottomToTop || [];
     for (let i = 0; i < colorNames.length; i += 1) {
       const layerName = colorNames[i];
-      const topIndex = spec.topLevelLayers.findIndex((layer) => layer.name === layerName);
-      if (topIndex < 0) continue;
+      const topLayerMeta = spec.topLevelLayers.find((layer) => layer.name === layerName);
+      if (!topLayerMeta) continue;
       exportTargets.push({
-        index: topIndex,
+        index: Number(topLayerMeta.index),
         fileName: (i + 1) + "_" + sanitize(layerName) + ".png",
         label: String(i + 1),
         layerName
@@ -2914,6 +2989,17 @@ function createController(rootNode) {
       appendStatus(statusStamp("Run Trapper"));
       appendStatus("Run start: " + new Date(runStartMs).toISOString());
       appendStatus("Export engine: " + EXPORT_ENGINE_VERSION);
+      let doc = null;
+      try {
+        doc = app.activeDocument;
+      } catch (e) {
+        doc = null;
+      }
+      if (!doc) {
+        throw new Error("No active document. Open a document before running the trapper.");
+      }
+      await createOriginalFlattenedSnapshot(doc);
+      appendStatus("snapshot excluded from layer inference: " + ORIGINAL_FLATTENED_LAYER_NAME);
       const bridgeBase = getSettings().bridgeUrl.replace(/\/$/, "");
       try {
         const healthStart = nowMs();
