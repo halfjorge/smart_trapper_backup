@@ -1,8 +1,8 @@
 # PROJECT NOTES - Smart Trapper (start here in a new chat)
 
-Last updated: 2026-10-09 (easy files signed off, minimum overlap) by Claude. Owner: Sara (The Half and Half, screen-print shop).
+Last updated: 2026-10-09 10:40 (handoff to a new chat for MEDIUM files) by Claude. Owner: Sara (The Half and Half, screen-print shop).
 
-**New chat? Read this file first, then `TRAP_RULES_NOTES.md` (the agreed trapping rules) and
+**New chat? Read section 0 (Next session) first, then the rest of this file, then `TRAP_RULES_NOTES.md` (the agreed trapping rules) and
 `CHANGES_2026-10-06.md` (what was changed and why).** Sections 9-11 below cover git, how to make a
 change, and how to test. `SMART_TRAPPER_HANDBOOK.md` and `SESSION_STATE.md` are older (March 2026).
 They still describe the panel/bridge/engine layout correctly, but their status and branch notes are
@@ -11,6 +11,128 @@ out of date.
 > SCOPE: this app is for poster / gig-print trapping. The fine-art separation tests (Welker,
 > Van Loon, Huemer) were standalone experiments, NOT part of the app. Their notes and code are kept
 > separately in `Desktop\Trap Examples\FINE_ART_NOTES.md` and `_FINE_ART_SEPS_CODE_claude.zip`. Don't mix them into app work.
+
+---
+
+## 0. NEXT SESSION STARTS HERE (handoff 2026-10-09)
+
+**Status**
+- EASY files (all solid Normal layers) are signed off; see section 5 and TEST_RESULTS.md.
+- The next job is **MEDIUM files**: solid Normal layers plus overlay layers (Multiply / Darken, or
+  under 100% opacity/fill). The test files are **Mempho** and **Helton** in
+  `Desktop\Trap Examples` (before.psd = client file, after.psd = Sara's hand trapping, notes.txt).
+- After that comes HARD (DMB Ocean, gray/gradient layers, rule 7).
+
+**Goal for medium files.** Implement rule 3 from TRAP_RULES_NOTES.md and prove it on Mempho and
+Helton:
+- An overlay layer is any non-Normal blend mode, or opacity/fill under 100%. Darken counts.
+- Colours UNDER an overlay are not knocked out and get no trap under it. The overprint is part of
+  the art (yellow under blue Multiply = green).
+- Overlays overlapping each other outside the key are kept.
+- Overlays ARE knocked out under the opaque key, with the normal 5 px trap.
+- Rule #1 still applies: with all layers on, the result must look like the client file, which
+  means comparing a blend-aware composite (Multiply/Darken), not just "top colour wins".
+- Mempho note: today's trapper would visibly change about 3% of that print.
+
+**What Claude found in the code but has not fixed yet.** Verify each before changing it:
+1. **Manual Progressive Knockout** (`applyProgressiveKnockoutInPhotoshop`, main.js about line 1325)
+   uses EVERY visible non-group layer as a cutter, overlays included. That breaks rule 3, because
+   it cuts colours out from under Multiply/Darken layers. Overlays must not cut. They still get
+   cut by the key, and by opaque layers above them.
+2. **`detectBlendLikeLayers`** (main.js about line 2734) has an operator-precedence bug. As
+   written it means `(blend != normal && opacity != 100) || fill != 100`, so a Multiply layer at
+   100% opacity is NOT detected. Intended: `blend != normal || opacity != 100 || fill != 100`.
+   Check where it's used before fixing.
+3. **Engine** (SmartTrapperB1/engine/src/main.rs): `job.json` already carries `blendMode`,
+   `opacity` and `fillOpacity` per colour, but the engine ignores them.
+   - It traps every lower colour under every upper colour, overlays included.
+   - In the round-trap / pullback "hidden" mask it treats an overlay above as hiding what's below.
+   - Needed: skip trap pairs whose TARGET (upper) is an overlay; don't count overlays as "hidden"
+     cover; overlay SOURCES still trap under opaque colours above and under the key.
+4. **Prepare Import / Import Traps** (`buildCleanLayerInGroup` about line 1868, `importTraps` about
+   line 3139): check whether the CLEAN__ and TRAP__ layers get the overlay's blend mode and opacity
+   (or sit in a group that has it). If a Multiply colour's CLEAN layer comes in as Normal, the
+   print changes. Claude could not run Photoshop, so ask Sara to confirm in the layer panel.
+5. **The test harness** (`tools/example_checks/easy_check.py`) assumes every layer is opaque
+   ("top colour wins"). For medium files it needs a blend-aware composite:
+   - Multiply: result = below * colour / 255.
+   - Darken: min(below, colour).
+   - Respect opacity.
+   - Then compare client vs trapped composite (e.g. count pixels that differ by more than a few
+     levels). Layer blend modes come from extract.py's meta.json (third field, e.g.
+     BlendMode.MULTIPLY).
+
+**Suggested order**
+1. Stage and extract Mempho and Helton:
+   - Copy before.psd, after.psd and notes.txt from the device. Helton's files are about 320 MB
+     each, so stage them one per call.
+   - Run `tools/example_checks/extract.py`.
+2. Make a blend-aware easy_check (or `--blend` mode) and measure today's trapper vs Sara's hand file
+   on both. This confirms the about 3% Mempho problem before changing anything.
+3. Engine rule-3 changes (item 3). Keep older job.json files working, then cargo test.
+4. Panel: MPK skips overlays as cutters (item 1), fix item 2, confirm item 4 with Sara.
+5. Re-measure, add a dated section to TEST_RESULTS.md, update CHANGES / TRAP_RULES / this file,
+   commit and push.
+6. Ask Sara to run both files in Photoshop. She says "read latest", and Claude reads the newest
+   `Desktop\TrapJobs\<doc>__UXP__<time>` folder and `trapper\UXP_Trapper\status_logs\` (see the
+   Working with Sara notes below).
+
+**Sara's current settings** (her last runs, 2026-10-09):
+- Trap width 5
+- Preflight cleanup on
+- Alpha threshold 89-90
+- Edge bias 1 (the engine raises 0-1 to 1)
+- Key trap pullback 1
+- Colour trap pullback 0 (2 only by choice on dot-heavy files)
+- Round traps on
+- Close key halo off (on only for halo files like Phish)
+
+**Poster registration drift is about 5 px at 300 ppi.** That's why traps are 5 px. The "2 px"
+figure was from the fine-art tests and does not apply here.
+
+**Working with Sara (how this chat ran)**
+- **Who she is:** a screen-print shop owner, not a coder. Use plain language and short answers. Ask
+  before engine changes that would change how a file prints; otherwise build, test, and report
+  numbers.
+- **Her computer:** this chat was linked to it. `Desktop\trapper` is the LIVE app folder that
+  Photoshop loads. Also linked: `Desktop\Trap Examples` and `Desktop\TrapJobs`.
+- **Delivering a change:**
+  1. Back up the old file to `_BACKUP_2026-10-06_before_claude\...\<name>_before_<change>.<ext>`.
+  2. Write the new file into `Desktop\trapper`.
+  3. Commit the same change to git and push it.
+  4. Tell Sara exactly what to do: "Reload" for a panel-only change, or "run
+     BUILD_AND_TEST_ENGINE.bat, then Reload" for an engine change.
+- **Git:**
+  - Clone `halfjorge/smart_trapper_backup` and work on branch `trapper_2026_10`. Push access works.
+  - The repo stores LF line endings (`tools/dev/lf.py`). The PC's main.js has mixed CRLF/LF. When
+    editing a PC copy, keep its line endings (`tools/dev/keepeol.py`) so diffs stay small.
+- **The cloud workspace is wiped between chats.** Nothing from this chat's `/home/claude` survives.
+  Re-clone the repo.
+  - **Building the engine in the cloud:** crates.io is BLOCKED there (tested 2026-10-09), so use the
+    vendored kit `tools/dev/engine_build_kit_cloud.zip`. It holds the dependency sources plus
+    `build_new/` with a Cargo.toml pointing at them.
+  - Steps:
+    1. Unzip it to a scratch folder.
+    2. Copy `SmartTrapperB1/engine/src/*.rs` into `build_new/src/`.
+    3. Run `cargo build --release --offline` and `cargo test --release --offline` (5 tests).
+    4. Copy edited .rs files back into the repo.
+  - On Sara's PC, BUILD_AND_TEST_ENGINE.bat builds the normal way with internet.
+  - Verified 2026-10-09: the kit builds today's engine, and all tests pass.
+- **Checking Sara's own runs:**
+  - `tools/example_checks/runcheck.py` measures a real TrapJobs run folder against the client file.
+  - For opaque files, `easy_check.py --set key=value` simulates other settings.
+- **Keep the docs current with every change.** That means CHANGES_2026-10-06.md (plain language for
+  Sara), TRAP_RULES_NOTES.md (rules BUILT/DECIDED), TEST_RESULTS.md (numbers), and this file.
+
+**Things that went wrong today (so they don't repeat)**
+- **Scrolling changed settings:** the mouse wheel over a number box changed its value (Edge bias -1,
+  so 0 traps). Fixed: the boxes are now text boxes, and the red banner warns about risky settings.
+- **No-overlap joins:** the round-trap corner rule and colour pullback could leave colours meeting
+  with no overlap. Fixed: always keep the first 1 px of trap.
+- **Untrapped key lines:** Edge bias 0 left the key lines untrapped. Fixed: minimum 1 px of key-edge
+  growth.
+- **Byrne's after file:** `Trap Examples\Byrne\after.tif` is an earlier TRAPPER output, not Sara's
+  hand trapping.
 
 ---
 
@@ -202,7 +324,7 @@ Goal: work through easy, then medium, then hard examples and make the engine han
 - **Left out for now:** automatic backing fills (BTS), and closing halos without asking (it's an
   on/off option instead).
 
-## 8. Claude's test scripts
+## 8. Claude's test scripts (also in git: tools/example_checks, tools/dev)
 
 `tools\example_checks\` (in git) holds the Python scripts used to compare engine output with the
 hand-trapped "after" files. The same scripts are also in `_claude_test_scripts.zip`. They are reference only, not part of the app. Paths inside them

@@ -6,7 +6,10 @@ opencv-python, Pillow and psd-tools (tifffile for TIFFs). Paths inside point to 
 workspace (`/home/claude/ex/...`), so adjust them before running.
 
 **Start with these**
-- `easy_check.py <job dir> [--halo 0,2] [--shape round|square] [--no-mpk]`: the standard check,
+- `runcheck.py <TrapJobs run folder> <client before dir>`: measures one of Sara's REAL panel runs
+  (what she sees in Photoshop) against the client file: visible change, butt px, trap at open
+  edge, % of the key area with colour under it.
+- `easy_check.py <job dir> [--halo 0,2] [--shape round|square] [--no-mpk] [--trap 5] [--set edgeBiasPx=1 ...]`: the standard check,
   and the one behind TEST_RESULTS.md.
   - The job dir holds `before/` and an optional `after/`, made with extract.py or tifflayers.py.
   - It aligns the after file by the key and matches its layers by ink colour.
@@ -41,3 +44,12 @@ workspace (`/home/claude/ex/...`), so adjust them before running.
 - `make_job.py`: builds a synthetic job
 - `runm.py`: times a run
 - `cmp.py`: checks two engine outputs pixel by pixel
+
+## ../dev/
+
+- `lf.py <files>`: convert CRLF to LF (the repo stores LF).
+- `keepeol.py <original> <edited_lf> <out>`: rebuild an edited file while keeping the original
+  file's per-line endings. The PC's main.js has mixed CRLF/LF, and this keeps diffs small.
+
+Note: easy_check.py and runcheck.py assume opaque (Normal) layers. Medium (overlay) files need a
+blend-aware composite (see PROJECT_NOTES section 0).

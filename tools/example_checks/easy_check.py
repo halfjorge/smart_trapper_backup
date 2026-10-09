@@ -11,8 +11,11 @@ ENGINE = '/home/claude/vend/build_new/target/release/smart_trapper_b1'
 SARA = dict(preflightCleanup=True, alphaThreshold=89, edgeBiasPx=1, keyTrapPullbackPx=1,
             colorTrapPullbackPx=0, trapShape='round')
 ap = argparse.ArgumentParser(); ap.add_argument('job'); ap.add_argument('--halo', default='0,2')
-ap.add_argument('--no-mpk', action='store_true'); ap.add_argument('--trap', default='5'); ap.add_argument('--shape', default='round'); ap.add_argument('--tag', default='')
-a = ap.parse_args(); job = a.job.rstrip('/'); SARA['trapShape'] = a.shape; TH = SARA['alphaThreshold']
+ap.add_argument('--no-mpk', action='store_true'); ap.add_argument('--trap', default='5'); ap.add_argument('--shape', default='round'); ap.add_argument('--tag', default=''); ap.add_argument('--set', action='append', default=[], help='override a job setting, e.g. --set colorTrapPullbackPx=2')
+a = ap.parse_args(); job = a.job.rstrip('/'); SARA['trapShape'] = a.shape
+for kv in a.set:
+    k, v = kv.split('=', 1); SARA[k] = type(SARA.get(k, 0.0))(float(v)) if not isinstance(SARA.get(k), bool) else v in ('1','true','True')
+TH = SARA['alphaThreshold']
 
 def load(d):
     m = json.load(open(f'{d}/meta.json'))
