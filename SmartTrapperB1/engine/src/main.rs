@@ -687,6 +687,13 @@ fn main()->Result<()>{
                 let d_open=fast::capped_dist_sq(&showing,w as usize,h as usize,trap_px);
                 for k in 0..n { if d_own[k] > d_open[k] && d_own[k] > 2 { safe[k]=0; } }
             }
+            if color_pull>0 {
+                // Colour trap pullback never removes the first ring (<= 1.42 px) next to
+                // the source colour, so pulled-back traps still overlap by 1 px instead
+                // of butting (rule 10). Only the rest of the trap is pulled back.
+                let d_own=fast::capped_dist_sq(&a,w as usize,h as usize,2);
+                for k in 0..n { if d_own[k] <= 2 { safe[k]=1; } }
+            }
         }
         for bi in (ai+1)..=color_names.len(){
             let is_key = bi==color_names.len();
