@@ -6,6 +6,13 @@ opencv-python, Pillow and psd-tools (tifffile for TIFFs). Paths inside point to 
 workspace (`/home/claude/ex/...`), so adjust them before running.
 
 **Start with these**
+- `easy_check.py <job dir> [--halo 0,2] [--shape round|square] [--no-mpk]`: the standard check,
+  and the one behind TEST_RESULTS.md.
+  - The job dir holds `before/` and an optional `after/`, made with extract.py or tifflayers.py.
+  - It aligns the after file by the key and matches its layers by ink colour.
+  - It runs MPK and then the engine with Sara's settings.
+  - It reports visible change vs the client, butt px, trap at open edge, trap width, ink use, and
+    agreement with the hand file.
 - `extract.py <psd> <outdir>`: writes every top-level layer as full-canvas RGBA `.npy`, plus
   meta.json.
 - `halo_test.py <job> <after-offset> <trapPx> <halo list>`: the newest, cleanest harness.

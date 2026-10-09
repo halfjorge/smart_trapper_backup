@@ -1,6 +1,6 @@
 # PROJECT NOTES - Smart Trapper (start here in a new chat)
 
-Last updated: 2026-10-09 (key halo added) by Claude. Owner: Sara (The Half and Half, screen-print shop).
+Last updated: 2026-10-09 (easy files signed off, minimum overlap) by Claude. Owner: Sara (The Half and Half, screen-print shop).
 
 **New chat? Read this file first, then `TRAP_RULES_NOTES.md` (the agreed trapping rules) and
 `CHANGES_2026-10-06.md` (what was changed and why).** Sections 9-11 below cover git, how to make a
@@ -125,19 +125,19 @@ How each type should be handled is in `TRAP_RULES_NOTES.md`:
 - Trap layers renamed `_under_`.
 - **Defaults:** round traps ON, colour trap pullback 0.
 
-**Easy files:** mostly matching, NOT yet signed off.
-- DMB and Methane match the hand trapping (about a 6 px trap fits best).
-- BTS's normal traps work. Its big "backing" fills were left out on purpose (rule 9).
-- **Key halo (rule 4):** BUILT 2026-10-09 as the "Close key halo" checkbox (default off). It closes
-  gaps of 2 px or less around the key. Phish, with Sara's settings: box off closes 33% of the
-  hand-filled halo (edge bias 1 already heals where the key's soft edge covers); box on closes
-  97%, with no other visible change.
-- **Rule 6, colour-to-colour hairlines:** ON HOLD (Sara's decision). It can't be told apart from
-  thin paper lines the artist meant.
-- **Open gap: alpha threshold.** The default is 90 (about 35%), but hand work rounds up from about
-  12-15% (Methane). Test values around 30-40. It stays a per-job setting.
-- **Not rechecked:** the DMB / Methane / Phish comparisons were run on Oct 6, before round traps,
-  pullback and the new defaults.
+**Easy files: re-checked 2026-10-09 on the current engine with Sara's settings. All pass.**
+Details are in `TEST_RESULTS.md`. Files: DMB, Methane, Phish, BTS, plus Byrne and Phish Jackson
+(neither has a hand file).
+- Nothing changes with all layers on except deliberate fixes (soft edges made solid, key halo).
+  No ink is lost and no colour is swapped.
+- Butt joins: 0 in every file, after the 1 px minimum-overlap fix to round traps.
+- Close key halo is right for Phish (it matches the hand file) and wrong for BTS and Methane, so
+  it stays off by default.
+- Rule 6, colour-to-colour hairlines: on hold (Sara's decision).
+- Alpha threshold: Sara uses 89. Methane's hand work rounded up from about 12-15%. Still a per-job
+  setting; no change.
+- Full-bleed edge issue: not seen in these files (no butt px within 3 px of the canvas edge).
+- Not covered: Vista (no before/after pair), Smashing Pumpkins, DMB Bourbon (excluded).
 
 **Medium and hard files:** the rules are written (3 and 7) but not yet built or verified in the
 engine.
@@ -151,7 +151,7 @@ engine.
 
 Goal: work through easy, then medium, then hard examples and make the engine handle all three.
 
-1. **Finish EASY.**
+1. **Finish EASY.** DONE 2026-10-09 (see TEST_RESULTS.md). The original plan was:
    - DONE: the Close key halo option. The colour-to-colour hairline fix is on hold.
    - Re-run every easy example on the current engine with the default settings: DMB, Methane,
      Phish, Phish Jackson, BTS, Byrne, Vista.
@@ -256,7 +256,7 @@ README inside the zip.
    change, she runs the .bat first.
 5. **Test** against the Trap Examples (section 11). Report what changed with all layers on, and
    any new butt joins.
-6. **Update the docs:**
+6. **Update the docs** (and add a dated section to `TEST_RESULTS.md` for any test run):
    - `CHANGES_2026-10-06.md`: a new dated section, in plain language for Sara.
    - `TRAP_RULES_NOTES.md`: mark rules BUILT or DECIDED.
    - This file: sections 5-7.
@@ -270,6 +270,12 @@ README inside the zip.
 - **Extract layers:** `tools/example_checks/extract.py <psd> <outdir>` writes every top-level layer
   as RGBA `.npy`. It needs psd-tools; a layered TIFF uses `tifflayers.py`.
 - **Run the real engine on an example:**
+  - `easy_check.py <job>` is the standard check, and the one behind TEST_RESULTS.md.
+    - It aligns the after file and matches its layers by colour.
+    - It runs MPK and then the engine with Sara's settings.
+    - It reports visible change, butt px, trap at open edge, trap width, and agreement with the
+      hand file.
+    - Options: `--halo 0,2`, `--shape square`, `--no-mpk`.
   - `halo_test.py <job> <offset> <trapPx> <halo list>` is the newest and cleanest. It builds a job
     folder with the panel's default settings and real soft alpha, runs Manual Progressive Knockout,
     runs the engine, and compares with the hand file.
