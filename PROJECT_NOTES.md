@@ -121,7 +121,9 @@ How each type should be handled is in `TRAP_RULES_NOTES.md`:
 - Clean Colors button.
 - Colour trap pullback setting (rule 10).
 - Round traps that follow their own colour (default ON).
-- Red file-check banner for files that aren't RGB at 300 ppi.
+- Red file-check banner for files that aren't RGB at 300 ppi. It also shows "CHECK SETTINGS" for
+  risky values (Edge bias below 0, Trap width 0, pullback not smaller than Trap width), and
+  "LAST RUN MADE 0 TRAPS" after a run with no traps.
 - Trap layers renamed `_under_`.
 - **Defaults:** round traps ON, colour trap pullback 0.
 

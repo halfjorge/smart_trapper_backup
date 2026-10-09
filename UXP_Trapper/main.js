@@ -2782,6 +2782,41 @@ function createController(rootNode) {
     }
     return problems;
   }
+  // Settings check: values that are almost always a slip of the mouse/keyboard
+  // (e.g. Edge bias -1 shrinks every colour so nothing touches and 0 traps are
+  // made). Shown in the red banner and written to the status log on Run Trapper.
+  function settingsProblems(s) {
+    const problems = [];
+    if (!s) return problems;
+    const trap = Number(s.trapPx);
+    const eb = Number(s.edgeBiasPx);
+    const at = Number(s.alphaThreshold);
+    const kp = Number(s.keyTrapPullbackPx);
+    const cp = Number(s.colorTrapPullbackPx);
+    if (s.preflightCleanup && eb < 0) {
+      problems.push("Edge bias is " + eb + " (below 0). That shrinks every colour, so colours stop touching:\n  few or no traps, and thin paper gaps on press. Usual: 1.");
+    }
+    if (!(trap > 0)) {
+      problems.push("Trap width is " + (isNaN(trap) ? "empty" : trap) + ": no traps will be made. Usual: 5.");
+    } else {
+      if (trap > 12) problems.push("Trap width is " + trap + " px, unusually wide. Usual: 5.");
+      if (cp >= trap) problems.push("Colour trap pullback (" + cp + ") is not smaller than Trap width (" + trap + "):\n  colour-to-colour traps will be cut away. Usual: 0.");
+      if (kp >= trap) problems.push("Key trap pullback (" + kp + ") is not smaller than Trap width (" + trap + "):\n  nothing will trap under the key. Usual: 1.");
+    }
+    if (s.preflightCleanup && (at < 1 || at > 200)) {
+      problems.push("Alpha threshold is " + at + ". Usual: 89-90 (about 35% counts as ink).");
+    }
+    return problems;
+  }
+  let lastRunZeroTraps = "";
+  function zeroTrapsHelp() {
+    let s = null;
+    try { s = getSettings(); } catch (e) {}
+    const issues = settingsProblems(s);
+    return (issues.length ? "Likely cause:\n" + issues.join("\n") + "\n" : "") +
+      "0 traps means no two colours (or a colour and the key) touch. Check that Edge bias is 0 or more\n" +
+      "and Trap width is above 0, then Run Trapper again (step back in History first if CLEAN layers were built).";
+  }
   let lastFileCheckText = null;
   function updateFileCheckBanner() {
     const el = els && els.fileCheckBanner;
@@ -2789,9 +2824,13 @@ function createController(rootNode) {
     let doc = null;
     try { doc = app.activeDocument; } catch (e) { doc = null; }
     const problems = fileFormatProblems(doc);
-    const text = problems.length
-      ? "CHECK THIS FILE (" + (doc && doc.title ? doc.title : "document") + ")\n" + problems.join("\n")
-      : "";
+    let settingIssues = [];
+    try { settingIssues = settingsProblems(getSettings()); } catch (e) {}
+    const parts = [];
+    if (problems.length) parts.push("CHECK THIS FILE (" + (doc && doc.title ? doc.title : "document") + ")\n" + problems.join("\n"));
+    if (settingIssues.length) parts.push("CHECK SETTINGS\n" + settingIssues.join("\n"));
+    if (lastRunZeroTraps) parts.push(lastRunZeroTraps);
+    const text = parts.join("\n\n");
     if (text === lastFileCheckText) return;
     lastFileCheckText = text;
     el.textContent = text;
@@ -3015,7 +3054,7 @@ function createController(rootNode) {
 
     const traps = (trapsObj && trapsObj.traps) ? trapsObj.traps : [];
     if (!traps.length) {
-      appendStatus("No traps found in traps.json.");
+      appendStatus("No traps to import: the engine made 0 traps for this run.\n" + zeroTrapsHelp());
       return;
     }
 
@@ -3142,7 +3181,7 @@ function createController(rootNode) {
       return;
     }
     if (!traps.length) {
-      appendStatus("No traps found in traps.json.");
+      appendStatus("No traps to import: the engine made 0 traps for this run.\n" + zeroTrapsHelp());
       return;
     }
 
@@ -3935,6 +3974,11 @@ function createController(rootNode) {
         if (problems.length) {
           appendStatus("WARNING - this file is not 300 ppi RGB. Traps may be the wrong size:\n" + problems.join("\n"));
         }
+        const settingIssues = settingsProblems(getSettings());
+        if (settingIssues.length) {
+          appendStatus("WARNING - check these settings before importing:\n" + settingIssues.join("\n"));
+        }
+        lastRunZeroTraps = "";
         updateFileCheckBanner();
       } catch (e) {}
       setRunProgress(10, "Creating snapshot");
@@ -4027,8 +4071,22 @@ function createController(rootNode) {
         "mask_colors.json exists: " + (maskColorsExists ? "YES" : "NO") +
         (maskColorsPath ? ("\npath: " + maskColorsPath) : "")
       );
+      let trapCount = -1;
+      try {
+        const t = await readJsonFile(currentJobFolderEntry, "traps.json");
+        trapCount = (t && t.traps) ? t.traps.length : 0;
+      } catch (e) {}
+      if (trapCount >= 0) appendStatus("Traps made by the engine: " + trapCount);
       appendStatus("Run total ms: " + elapsedMs(runStartMs));
-      setRunProgress(100, "Complete");
+      if (trapCount === 0) {
+        lastRunZeroTraps = "LAST RUN MADE 0 TRAPS\n" + zeroTrapsHelp();
+        appendStatus("WARNING - the engine made 0 traps.\n" + zeroTrapsHelp());
+        try { updateFileCheckBanner(); } catch (e) {}
+        setRunProgress(100, "Complete - but 0 traps (see status)");
+      } else {
+        try { updateFileCheckBanner(); } catch (e) {}
+        setRunProgress(100, "Complete");
+      }
     } catch (e) {
       setRunProgress(100, "Failed");
       appendStatus("Run Trapper failed.\n" + String(e));
