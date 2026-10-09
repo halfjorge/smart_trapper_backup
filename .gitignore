@@ -32,3 +32,11 @@ Thumbs.db
 .DS_Store
 .vscode/
 .vs/
+
+# Keep the dated change log (the "*_20*" rule above would hide it)
+!CHANGES_20*.md
+
+# Local backups, test archives and binaries (not source)
+_BACKUP_*/
+_claude_test_scripts.zip
+**/*.exe

@@ -5,6 +5,10 @@ const { localFileSystem, formats } = require("uxp").storage;
 const STORAGE_KEY = "smartTrapperSettings";
 const EXPORT_ENGINE_VERSION = "dom-save-v4-rgb-convert-debug";
 const ORIGINAL_FLATTENED_LAYER_NAME = "__ORIGINAL_FLATTENED__";
+// Run Trapper used to open every exported mask in Photoshop to sample its
+// colour. That never worked (always "missing") and was slow; the engine now
+// writes mask_colors.json itself. Set to true to try the old way again.
+const PANEL_COLOR_SAMPLING_ON_RUN = false;
 const DEFAULT_JOB_FOLDER = "C:\\Users\\Valued Customer\\Desktop\\TrapJobs";
 const DEFAULT_LOG_FOLDER = "C:\\Users\\Valued Customer\\Desktop\\trapper\\UXP_Trapper\\status_logs";
 
@@ -14,6 +18,8 @@ const DEFAULTS = {
   alphaThreshold: 8,
   edgeBiasPx: 0,
   keyTrapPullbackPx: 1,
+  colorTrapPullbackPx: 0,
+  roundTraps: true,
   trapPx: 5,
   bridgeUrl: "http://127.0.0.1:8765",
   jobFolder: DEFAULT_JOB_FOLDER,
@@ -23,40 +29,62 @@ const DEFAULTS = {
 function panelMarkup() {
   return `
     <div class="app">
+      <div id="fileCheckBanner" style="display:none; background:#b3261e; color:#ffffff; font-weight:bold; padding:8px 10px; margin:0 0 8px 0; border-radius:4px; white-space:pre-line; line-height:1.35;"></div>
       <div class="panel">
         <div class="section-title">Run Settings</div>
-        <div class="setting-box">
-          <label>
+        <button id="helpToggleBtn" class="help-toggle">? Explain settings</button>
+        <div class="setting-box" title="Currently has no effect. Reserved for extra detail in the status log.">
+          <div class="check-row">
             <input id="fullDebug" type="checkbox">
-            <span>Full debug logging</span>
-          </label>
+            <span class="check-text" data-for="fullDebug" style="color:#f2f2f2; opacity:1;">Full debug logging</span>
+          </div>
+          <div class="field-help">Currently has no effect. Reserved for extra detail in the status log.</div>
         </div>
-        <div class="setting-box">
-          <label>
+        <div class="setting-box" title="Tidies each colour before trapping, using Alpha threshold and Edge bias below. When off, those two settings are ignored.">
+          <div class="check-row">
             <input id="preflightCleanup" type="checkbox">
-            <span>Preflight cleanup</span>
-          </label>
+            <span class="check-text" data-for="preflightCleanup" style="color:#f2f2f2; opacity:1;">Preflight cleanup</span>
+          </div>
+          <div class="field-help">Tidies each colour before trapping, using Alpha threshold and Edge bias below. When off, those two settings are ignored.</div>
         </div>
-        <div class="field">
+        <div class="setting-box" title="Traps grow the same 5 px in every direction (round) instead of in a square, and a trap under another colour stops where it gets closer to open paper than to its own colour, so it never wraps around the end of a shape. Turn off to get the old square traps. Under the key nothing changes.">
+          <div class="check-row">
+            <input id="roundTraps" type="checkbox">
+            <span class="check-text" data-for="roundTraps" style="color:#f2f2f2; opacity:1;">Round traps (follow own colour)</span>
+          </div>
+          <div class="field-help">Traps grow the same 5 px in every direction (round) instead of in a square, and a trap under another colour stops where it gets closer to open paper than to its own colour, so it never wraps around the end of a shape. Turn off to get the old square traps. Under the key nothing changes.</div>
+        </div>
+        <div class="field" title="How solid a pixel must be to count as ink (0-255). Soft edge pixels below this are treated as paper. 90 = about 35% opacity. Only used when Preflight cleanup is on.">
           <div class="field-label">Alpha threshold</div>
           <input id="alphaThreshold" type="number" min="0" max="255" step="1">
+          <div class="field-help">How solid a pixel must be to count as ink (0-255). Soft edge pixels below this are treated as paper. 90 = about 35% opacity. Only used when Preflight cleanup is on.</div>
         </div>
-        <div class="field">
+        <div class="field" title="Grows (+) or shrinks (-) every colour's edges before trapping. Growth only happens under the key, never out onto paper, so 1 closes hairline white gaps under the keyline. Only used when Preflight cleanup is on.">
           <div class="field-label">Edge bias (px)</div>
-          <input id="edgeBiasPx" type="number" step="1">
+          <input id="edgeBiasPx" type="number" step="0.5">
+          <div class="field-help">Grows (+) or shrinks (-) every colour's edges before trapping. Growth only happens under the key, never out onto paper, so 1 closes hairline white gaps under the keyline. Only used when Preflight cleanup is on.</div>
         </div>
-        <div class="field">
+        <div class="field" title="When a colour spreads under the key, stop this many pixels short of the key's outer edge so the trap can't peek out past the keyline onto the paper. 0 = no pullback.">
           <div class="field-label">Key trap pullback (px)</div>
           <input id="keyTrapPullbackPx" type="number" min="0" step="1">
+          <div class="field-help">When a colour spreads under the key, stop this many pixels short of the key's outer edge so the trap can't peek out past the keyline onto the paper. 0 = no pullback.</div>
         </div>
-        <div class="field">
+        <div class="field" title="A trap tucked under another colour stops this many pixels short of that colour's open edge (where it meets paper or a colour below), so a slightly off-register print can't show a sliver of trap. Stops traps from butting up to the edge (e.g. red creeping right to the edge of small gray dots). 0 = old behaviour.">
+          <div class="field-label">Colour trap pullback (px)</div>
+          <input id="colorTrapPullbackPx" type="number" min="0" step="1">
+          <div class="field-help">A trap tucked under another colour stops this many pixels short of that colour's open edge (where it meets paper or a colour below), so a slightly off-register print can't show a sliver of trap. Stops traps from butting up to the edge (e.g. red creeping right to the edge of small gray dots). 0 = old behaviour.</div>
+        </div>
+        <div class="field" title="How far each colour spreads under the colour above it in the layer stack. At 300 dpi, 6 px is about 0.02 in (0.5 mm).">
           <div class="field-label">Trap width (px)</div>
           <input id="trapPx" type="number" min="0" step="1">
+          <div class="field-help">How far each colour spreads under the colour above it in the layer stack. At 300 dpi, 6 px is about 0.02 in (0.5 mm).</div>
         </div>
       </div>
 
       <div class="panel">
         <div class="section-title">Actions</div>
+        <button id="cleanColorsBtn" class="button secondary full" title="Optional: refills every solid colour layer (and the key) with its majority colour to remove off-colour specks. Skips paper, overlay and gray layers. One Ctrl+Z undoes it.">Clean Colors</button>
+        <div class="field-help">Optional, run before Run Trapper. Refills every solid colour layer and the key with its majority colour, like Ctrl-clicking the layer and filling it. Skips the paper (bottom) layer, overlay layers and gray layers. Soft edges keep their transparency. One Ctrl+Z undoes it.</div>
         <button id="manualKnockoutBtn" class="button secondary full">Manual Progressive Knockout</button>
         <button id="cutKeyBtn" class="button secondary full">Cut Top Key From Colors</button>
         <button id="runBtn" class="button primary full">Run Trapper</button>
@@ -117,11 +145,14 @@ function createController(rootNode) {
   function bindEls() {
     [
       "refreshDocBtn",
+      "helpToggleBtn",
       "fullDebug",
       "preflightCleanup",
+      "roundTraps",
       "alphaThreshold",
       "edgeBiasPx",
       "keyTrapPullbackPx",
+      "colorTrapPullbackPx",
       "trapPx",
       "bridgeUrlDisplay",
       "jobFolderDisplay",
@@ -136,6 +167,8 @@ function createController(rootNode) {
       "runBtn",
       "manualKnockoutBtn",
       "cutKeyBtn",
+      "fileCheckBanner",
+      "cleanColorsBtn",
       "exportMasksBtn",
       "prepareImportBtn",
       "importPlanBtn",
@@ -219,6 +252,14 @@ function createController(rootNode) {
     });
   }
 
+  // Reads a number field; empty/invalid -> default, but a real 0 stays 0.
+  function numberOr(value, fallback) {
+    const text = String(value === undefined || value === null ? "" : value).trim();
+    if (text === "") return fallback;
+    const n = Number(text);
+    return Number.isFinite(n) ? n : fallback;
+  }
+
   function getSettings() {
     const normalizeFolderDisplayValue = (value, fallback) => {
       const text = String(value || "").trim();
@@ -228,10 +269,12 @@ function createController(rootNode) {
     return {
       fullDebug: !!els.fullDebug.checked,
       preflightCleanup: !!els.preflightCleanup.checked,
-      alphaThreshold: Number(els.alphaThreshold.value || DEFAULTS.alphaThreshold),
-      edgeBiasPx: Number(els.edgeBiasPx.value || DEFAULTS.edgeBiasPx),
-      keyTrapPullbackPx: Number(els.keyTrapPullbackPx.value || DEFAULTS.keyTrapPullbackPx),
-      trapPx: Number(els.trapPx.value || DEFAULTS.trapPx),
+      roundTraps: !!els.roundTraps.checked,
+      alphaThreshold: numberOr(els.alphaThreshold.value, DEFAULTS.alphaThreshold),
+      edgeBiasPx: numberOr(els.edgeBiasPx.value, DEFAULTS.edgeBiasPx),
+      keyTrapPullbackPx: numberOr(els.keyTrapPullbackPx.value, DEFAULTS.keyTrapPullbackPx),
+      colorTrapPullbackPx: numberOr(els.colorTrapPullbackPx.value, DEFAULTS.colorTrapPullbackPx),
+      trapPx: numberOr(els.trapPx.value, DEFAULTS.trapPx),
       bridgeUrl: String(els.bridgeUrlDisplay.textContent || DEFAULTS.bridgeUrl).trim(),
       jobFolder: normalizeFolderDisplayValue(els.jobFolderDisplay.textContent, DEFAULTS.jobFolder),
       logFolder: normalizeFolderDisplayValue(els.logFolderDisplay.textContent, DEFAULTS.logFolder)
@@ -242,9 +285,11 @@ function createController(rootNode) {
     const s = Object.assign({}, DEFAULTS, settings || {});
     els.fullDebug.checked = !!s.fullDebug;
     els.preflightCleanup.checked = !!s.preflightCleanup;
+    els.roundTraps.checked = !!s.roundTraps;
     els.alphaThreshold.value = String(s.alphaThreshold);
     els.edgeBiasPx.value = String(s.edgeBiasPx);
     els.keyTrapPullbackPx.value = String(s.keyTrapPullbackPx);
+    els.colorTrapPullbackPx.value = String(s.colorTrapPullbackPx);
     els.trapPx.value = String(s.trapPx);
     els.bridgeUrlDisplay.textContent = s.bridgeUrl;
     els.jobFolderDisplay.textContent = String(s.jobFolder || "").trim() || DEFAULTS.jobFolder;
@@ -398,17 +443,33 @@ function createController(rootNode) {
     } catch (e) {}
   }
 
+  async function parentFolderEntryOf(folderEntry) {
+    const path = normalizePathLikeText(folderEntry && folderEntry.nativePath);
+    if (!path) return null;
+    const cut = path.replace(/\\+$/, "").lastIndexOf("\\");
+    if (cut <= 0) return null;
+    return await tryBindFolderEntryFromPath(path.substring(0, cut));
+  }
+
   async function ensureRunJobFolder(doc) {
     await ensureCurrentJobFolderEntry();
     if (!currentJobFolderEntry) {
       throw new Error("No job/base folder selected. Create or select a folder first.");
     }
 
+    // The panel points at the last run's folder after every run. Reusing it
+    // mixed old files (masks, mask_colors.json) into the next run - even from
+    // a different PSD. So always start a fresh timestamped folder next to it.
+    let baseFolder = currentJobFolderEntry;
     if (await looksLikeJobFolder(currentJobFolderEntry)) {
-      return currentJobFolderEntry;
+      const parent = await parentFolderEntryOf(currentJobFolderEntry);
+      if (!parent) {
+        return currentJobFolderEntry; // could not find the parent: old behaviour
+      }
+      baseFolder = parent;
     }
 
-    return await createTimestampedJobFolderUnder(currentJobFolderEntry, doc);
+    return await createTimestampedJobFolderUnder(baseFolder, doc);
   }
 
   function flattenTopLevelLayers(doc) {
@@ -493,9 +554,11 @@ function createController(rootNode) {
         heightPx: Math.round(Number(doc.height)),
         resolution: Number(doc.resolution),
         preflightCleanup: !!getSettings().preflightCleanup,
-        alphaThreshold: Number(getSettings().alphaThreshold || DEFAULTS.alphaThreshold),
-        edgeBiasPx: Number(getSettings().edgeBiasPx || DEFAULTS.edgeBiasPx),
-        keyTrapPullbackPx: Number(getSettings().keyTrapPullbackPx || DEFAULTS.keyTrapPullbackPx),
+        trapShape: getSettings().roundTraps ? "round" : "square",
+        alphaThreshold: numberOr(getSettings().alphaThreshold, DEFAULTS.alphaThreshold),
+        edgeBiasPx: numberOr(getSettings().edgeBiasPx, DEFAULTS.edgeBiasPx),
+        keyTrapPullbackPx: numberOr(getSettings().keyTrapPullbackPx, DEFAULTS.keyTrapPullbackPx),
+        colorTrapPullbackPx: numberOr(getSettings().colorTrapPullbackPx, DEFAULTS.colorTrapPullbackPx),
         keyLayerName: keyLayer ? keyLayer.meta.name : "",
         paperLayerName: paperLayer ? paperLayer.meta.name : "",
         colors: [],
@@ -746,10 +809,12 @@ function createController(rootNode) {
     const desc = (result && result[0]) || {};
     const b = desc.boundsNoEffects || desc.bounds || null;
     if (!b) return null;
-    const left = Number((b.left && b.left._value) || b.left || 0);
-    const top = Number((b.top && b.top._value) || b.top || 0);
-    const right = Number((b.right && b.right._value) || b.right || 0);
-    const bottom = Number((b.bottom && b.bottom._value) || b.bottom || 0);
+    // A value of 0 (layer touching the canvas edge) must read as 0, not NaN.
+    const unitNum = (v) => Number(v && typeof v === "object" ? v._value : v) || 0;
+    const left = unitNum(b.left);
+    const top = unitNum(b.top);
+    const right = unitNum(b.right);
+    const bottom = unitNum(b.bottom);
     return {
       left,
       top,
@@ -1419,6 +1484,314 @@ function createController(rootNode) {
     return { applied: operations > 0, operations, keyName: key.meta.name };
   }
 
+  // ---------------------------------------------------------------------------
+  // Clean Colors
+  // Automates the manual fix: Ctrl-click a layer and fill it 100% with its
+  // majority colour. Every visible, Normal, 100% pixel layer is recoloured,
+  // including the key; the bottom (paper) layer is never touched.
+  // Overlay layers (not Normal, or under 100% opacity/fill) and gray layers
+  // (mostly semi-transparent pixels) are skipped. Only colour changes: each
+  // pixel keeps its own transparency, so soft edges are left to Alpha threshold.
+  // ---------------------------------------------------------------------------
+  const CLEAN_COLORS_GRAY_PARTIAL_SHARE = 0.35;  // skip as gray above this share of semi-transparent ink
+  const CLEAN_COLORS_MIN_MAJORITY_SHARE = 0.5;   // skip if the majority colour (within 10 levels) covers less
+  const CLEAN_COLORS_NEAR_LEVELS = 10;
+  const CLEAN_COLORS_STRIP_ROWS = 512;
+
+  function isNormalBlendMeta(meta) {
+    const mode = String(meta && meta.blendMode || "").toLowerCase();
+    return mode === "normal" || mode === "blendmode.normal";
+  }
+
+  function isPixelKindMeta(meta) {
+    return String(meta && meta.kind || "").toLowerCase().indexOf("pixel") !== -1;
+  }
+
+  function layerBoundsPx(layer) {
+    const num = (v) => Number(v && typeof v === "object" ? v._value : v) || 0;
+    const b = layer.boundsNoEffects || layer.bounds;
+    return {
+      left: Math.round(num(b.left)),
+      top: Math.round(num(b.top)),
+      right: Math.round(num(b.right)),
+      bottom: Math.round(num(b.bottom))
+    };
+  }
+
+  // Reads the layer at full resolution in horizontal strips and builds a
+  // histogram of fully opaque colours. Returns counts needed for the decision.
+  async function analyzeLayerColors(imaging, docId, layerId, bounds, targetWidth) {
+    const hist = new Map();
+    let opaque = 0;
+    let partial = 0;
+    const width = bounds.right - bounds.left;
+    const height = bounds.bottom - bounds.top;
+    if (width <= 0 || height <= 0) return { hist, opaque, partial };
+
+    const strips = [];
+    if (targetWidth) {
+      strips.push({ bounds, targetSize: { width: Math.min(width, targetWidth) } });
+    } else {
+      for (let top = bounds.top; top < bounds.bottom; top += CLEAN_COLORS_STRIP_ROWS) {
+        strips.push({
+          bounds: {
+            left: bounds.left,
+            right: bounds.right,
+            top,
+            bottom: Math.min(bounds.bottom, top + CLEAN_COLORS_STRIP_ROWS)
+          }
+        });
+      }
+    }
+
+    for (const strip of strips) {
+      const opts = {
+        documentID: docId,
+        layerID: layerId,
+        sourceBounds: strip.bounds,
+        componentSize: 8,
+        applyAlpha: false
+      };
+      if (strip.targetSize) opts.targetSize = strip.targetSize;
+      const result = await imaging.getPixels(opts);
+      const imageData = result.imageData;
+      try {
+        const comps = Number(imageData.components || 4);
+        const data = await imageData.getData();
+        const n = data.length;
+        for (let i = 0; i < n; i += comps) {
+          const a = comps >= 4 ? data[i + 3] : 255;
+          if (a === 0) continue;
+          if (a < 255) { partial += 1; continue; }
+          opaque += 1;
+          const key = (data[i] << 16) | (data[i + 1] << 8) | data[i + 2];
+          hist.set(key, (hist.get(key) || 0) + 1);
+        }
+      } finally {
+        try { imageData.dispose(); } catch (e) {}
+      }
+    }
+    return { hist, opaque, partial };
+  }
+
+  function majorityColor(stats) {
+    let bestKey = -1;
+    let bestCount = 0;
+    stats.hist.forEach((count, key) => {
+      if (count > bestCount) { bestCount = count; bestKey = key; }
+    });
+    if (bestKey < 0) return null;
+    const rgb = { r: (bestKey >> 16) & 255, g: (bestKey >> 8) & 255, b: bestKey & 255 };
+    let near = 0;
+    stats.hist.forEach((count, key) => {
+      const dr = Math.abs(((key >> 16) & 255) - rgb.r);
+      const dg = Math.abs(((key >> 8) & 255) - rgb.g);
+      const db = Math.abs((key & 255) - rgb.b);
+      if (Math.max(dr, dg, db) <= CLEAN_COLORS_NEAR_LEVELS) near += count;
+    });
+    return {
+      rgb,
+      exactShare: stats.opaque ? bestCount / stats.opaque : 0,
+      nearShare: stats.opaque ? near / stats.opaque : 0
+    };
+  }
+
+  function rgbText(rgb) {
+    return rgb.r + "," + rgb.g + "," + rgb.b;
+  }
+
+  function pctText(x) {
+    return (Math.round(x * 1000) / 10).toFixed(1) + "%";
+  }
+
+  async function applyCleanColorsInPhotoshop(doc) {
+    const ps = require("photoshop");
+    const imaging = ps.imaging;
+    if (!imaging || typeof imaging.getPixels !== "function") {
+      throw new Error("This Photoshop version does not offer the pixel reading Clean Colors needs.");
+    }
+    const mode = String(doc.mode || "").toLowerCase();
+    if (mode && mode.indexOf("rgb") === -1) {
+      throw new Error("Clean Colors works on RGB documents only (this document is " + doc.mode + ").");
+    }
+
+    const inference = getTopLevelEntriesExcludingSnapshot(doc);
+    const visible = (inference.entries || []).filter((e) => e && e.meta && e.meta.visible);
+    if (visible.length < 2) {
+      appendStatus("clean colors: skipped (need at least one colour layer and a paper layer)");
+      return { filled: 0, skipped: 0, failed: 0 };
+    }
+    const paper = visible[visible.length - 1];
+    const candidates = visible.slice(0, visible.length - 1);
+    const docId = doc.id || doc._id;
+    const summary = { filled: 0, skipped: 0, failed: 0 };
+
+    appendStatus("clean colors: paper left alone: " + paper.meta.name);
+
+    await core.executeAsModal(async (executionContext) => {
+      let suspensionID = null;
+      try {
+        suspensionID = await executionContext.hostControl.suspendHistory({
+          documentID: docId,
+          name: "Clean Colors"
+        });
+      } catch (e) {
+        suspensionID = null;
+      }
+
+      try {
+        await action.batchPlay([{
+          _obj: "set",
+          _target: [{ _ref: "channel", _property: "selection" }],
+          to: { _enum: "ordinal", _value: "none" },
+          _options: { dialogOptions: "dontDisplay" }
+        }], {});
+
+        for (let i = 0; i < candidates.length; i += 1) {
+          const entry = candidates[i];
+          const meta = entry.meta;
+          const name = meta.name;
+          const label = (i === 0 ? "[key] " : "") + name;
+
+          if (meta.kind === "group" || !isPixelKindMeta(meta)) {
+            appendStatus("  " + label + ": skipped (not a plain pixel layer: " + meta.kind + ")");
+            summary.skipped += 1;
+            continue;
+          }
+          if (!isNormalBlendMeta(meta) || Number(meta.opacity) < 100 || Number(meta.fillOpacity) < 100) {
+            appendStatus(
+              "  " + label + ": skipped (overlay: " + meta.blendMode +
+              ", opacity " + meta.opacity + "%, fill " + meta.fillOpacity + "%)"
+            );
+            summary.skipped += 1;
+            continue;
+          }
+
+          try {
+            const layerId = Number(layerIdOf(entry.layer) || 0);
+            const raw = layerBoundsPx(entry.layer);
+            const docW = Math.round(Number(doc.width) || raw.right);
+            const docH = Math.round(Number(doc.height) || raw.bottom);
+            const bounds = {
+              left: Math.max(0, raw.left),
+              top: Math.max(0, raw.top),
+              right: Math.min(docW, raw.right),
+              bottom: Math.min(docH, raw.bottom)
+            };
+            const startMs = nowMs();
+            const stats = await analyzeLayerColors(imaging, docId, layerId, bounds, 0);
+            const ink = stats.opaque + stats.partial;
+            if (!ink) {
+              appendStatus("  " + label + ": skipped (empty layer)");
+              summary.skipped += 1;
+              continue;
+            }
+            const partialShare = stats.partial / ink;
+            if (partialShare > CLEAN_COLORS_GRAY_PARTIAL_SHARE || !stats.opaque) {
+              appendStatus(
+                "  " + label + ": skipped (gray layer: " + pctText(partialShare) +
+                " of its pixels are semi-transparent)"
+              );
+              summary.skipped += 1;
+              continue;
+            }
+            const major = majorityColor(stats);
+            if (!major || major.nearShare < CLEAN_COLORS_MIN_MAJORITY_SHARE) {
+              appendStatus(
+                "  " + label + ": skipped (no clear majority colour; top colour " +
+                (major ? rgbText(major.rgb) + " covers only " + pctText(major.nearShare) : "none") + ")"
+              );
+              summary.skipped += 1;
+              continue;
+            }
+
+            await action.batchPlay([
+              {
+                _obj: "select",
+                _target: [{ _ref: "layer", _id: layerId }],
+                makeVisible: false,
+                _options: { dialogOptions: "dontDisplay" }
+              },
+              {
+                _obj: "fill",
+                using: { _enum: "fillContents", _value: "color" },
+                color: {
+                  _obj: "RGBColor",
+                  red: major.rgb.r,
+                  green: major.rgb.g,
+                  blue: major.rgb.b
+                },
+                opacity: { _unit: "percentUnit", _value: 100 },
+                mode: { _enum: "blendMode", _value: "normal" },
+                preserveTransparency: true,
+                _options: { dialogOptions: "dontDisplay" }
+              }
+            ], {});
+
+            // Quick check that Photoshop put down the colour we asked for.
+            let check = "";
+            try {
+              const after = majorityColor(await analyzeLayerColors(imaging, docId, layerId, bounds, 1200));
+              if (after) {
+                const same = after.rgb.r === major.rgb.r && after.rgb.g === major.rgb.g && after.rgb.b === major.rgb.b;
+                check = same ? ", checked OK" : ", WARNING layer now reads " + rgbText(after.rgb);
+              }
+            } catch (e) {
+              check = ", check skipped";
+            }
+
+            appendStatus(
+              "  " + label + ": filled RGB " + rgbText(major.rgb) +
+              " | off-colour solid pixels fixed: " + pctText(1 - major.nearShare) +
+              " | soft-edge pixels recoloured: " + pctText(partialShare) +
+              check + " | " + elapsedMs(startMs) + " ms"
+            );
+            summary.filled += 1;
+          } catch (e) {
+            appendStatus("  " + label + ": FAILED (" + String(e && e.message || e) + ")");
+            summary.failed += 1;
+          }
+        }
+      } finally {
+        if (suspensionID !== null) {
+          await executionContext.hostControl.resumeHistory(suspensionID, true);
+        }
+      }
+    }, { commandName: "Clean Colors" });
+
+    return summary;
+  }
+
+  async function runCleanColors() {
+    try {
+      appendStatus(statusStamp("Clean Colors"));
+      let doc = null;
+      try {
+        doc = app.activeDocument;
+      } catch (e) {
+        doc = null;
+      }
+      if (!doc) {
+        throw new Error("No active document. Open a document before running Clean Colors.");
+      }
+      const startMs = nowMs();
+      const result = await applyCleanColorsInPhotoshop(doc);
+      appendStatus(
+        "Clean Colors complete.\n" +
+        "Layers filled: " + result.filled + "\n" +
+        "Layers skipped: " + result.skipped + "\n" +
+        "Layers failed: " + result.failed + "\n" +
+        "Undo all of it with one Ctrl+Z (history step \"Clean Colors\").\n" +
+        "Elapsed ms: " + elapsedMs(startMs)
+      );
+    } catch (e) {
+      appendStatus("Clean Colors failed.\n" + String(e));
+      try {
+        if (e && e.stack) appendStatus("Clean Colors stack:\n" + String(e.stack));
+      } catch (stackErr) {}
+    }
+  }
+
   async function runCutTopKeyKnockout() {
     try {
       appendStatus(statusStamp("Cut Top Key From Colors"));
@@ -1481,7 +1854,7 @@ function createController(rootNode) {
   }
 
   async function buildCleanLayerInGroup(group, sourceName, maskColors) {
-    const sourceColor = maskColors[sourceName] || null;
+    const sourceColor = lookupMaskColor(maskColors, sourceName);
     if (!sourceColor) {
       return { ok: false, message: "No source color metadata for " + sourceName };
     }
@@ -1772,15 +2145,49 @@ function createController(rootNode) {
   }
 
   function findArtLayerByNameInfo(container, name) {
+    // Exact name first. Then a "file-safe" match: group/file names replace
+    // characters like " / : with _ , so a layer called "Light" Purple must
+    // still be found when looked up as _Light_ Purple.
+    return findArtLayerByNameExact(container, name) ||
+      findArtLayerByNameSanitized(container, sanitize(name));
+  }
+
+  function findArtLayerByNameExact(container, name) {
     const layers = container.layers || [];
     for (let i = 0; i < layers.length; i += 1) {
       const layer = layers[i];
       if (isGroupLikeLayer(layer)) {
-        const hit = findArtLayerByNameInfo(layer, name);
+        const hit = findArtLayerByNameExact(layer, name);
         if (hit) return hit;
       } else if (layer.name === name) {
         return layer;
       }
+    }
+    return null;
+  }
+
+  function findArtLayerByNameSanitized(container, safeName) {
+    const layers = container.layers || [];
+    for (let i = 0; i < layers.length; i += 1) {
+      const layer = layers[i];
+      if (isGroupLikeLayer(layer)) {
+        const hit = findArtLayerByNameSanitized(layer, safeName);
+        if (hit) return hit;
+      } else if (sanitize(layer.name) === safeName) {
+        return layer;
+      }
+    }
+    return null;
+  }
+
+  // Look up a colour in mask_colors.json by exact name, or by file-safe name.
+  function lookupMaskColor(maskColors, name) {
+    if (!maskColors) return null;
+    if (maskColors[name]) return maskColors[name];
+    const safe = sanitize(name);
+    const keys = Object.keys(maskColors);
+    for (let i = 0; i < keys.length; i += 1) {
+      if (keys[i].indexOf("__") !== 0 && sanitize(keys[i]) === safe) return maskColors[keys[i]];
     }
     return null;
   }
@@ -2327,7 +2734,60 @@ function createController(rootNode) {
     });
   }
 
+  // File check: the trapper's pixel settings (trap width etc.) assume a
+  // 300 ppi RGB document. Anything else is shown in red at the top.
+  const EXPECTED_PPI = 300;
+  function friendlyModeName(mode) {
+    const m = String(mode || "").toLowerCase();
+    if (m.indexOf("rgb") !== -1) return "RGB";
+    if (m.indexOf("cmyk") !== -1) return "CMYK";
+    if (m.indexOf("gray") !== -1) return "Grayscale";
+    if (m.indexOf("lab") !== -1) return "Lab";
+    if (m.indexOf("index") !== -1) return "Indexed";
+    if (m.indexOf("bitmap") !== -1) return "Bitmap";
+    if (m.indexOf("duotone") !== -1) return "Duotone";
+    if (m.indexOf("multichannel") !== -1) return "Multichannel";
+    return String(mode || "unknown");
+  }
+  function fileFormatProblems(doc) {
+    const problems = [];
+    if (!doc) return problems;
+    let mode = "";
+    let ppi = 0;
+    try { mode = String(doc.mode); } catch (e) {}
+    try { ppi = Number(doc.resolution); } catch (e) {}
+    const modeName = friendlyModeName(mode);
+    if (mode && modeName !== "RGB") {
+      problems.push("Colour mode is " + modeName + ", not RGB.\n  Fix: Image > Mode > RGB Color.");
+    }
+    if (ppi && Math.round(ppi) !== EXPECTED_PPI) {
+      const r = Math.round(ppi);
+      let fix = "  Fix: Image > Image Size, Resample on, set Resolution to 300.";
+      if (r > EXPECTED_PPI) {
+        fix += "\n  Or keep it and set Trap width to about " + Math.round(5 * r / EXPECTED_PPI) + " px (5 px at 300 ppi).";
+      }
+      problems.push("Resolution is " + r + " ppi, not 300.\n" + fix);
+    }
+    return problems;
+  }
+  let lastFileCheckText = null;
+  function updateFileCheckBanner() {
+    const el = els && els.fileCheckBanner;
+    if (!el) return;
+    let doc = null;
+    try { doc = app.activeDocument; } catch (e) { doc = null; }
+    const problems = fileFormatProblems(doc);
+    const text = problems.length
+      ? "CHECK THIS FILE (" + (doc && doc.title ? doc.title : "document") + ")\n" + problems.join("\n")
+      : "";
+    if (text === lastFileCheckText) return;
+    lastFileCheckText = text;
+    el.textContent = text;
+    el.style.display = text ? "block" : "none";
+  }
+
   async function refreshDocumentSummary() {
+    try { updateFileCheckBanner(); } catch (e) {}
     let doc = null;
     try {
       doc = app.activeDocument;
@@ -2594,7 +3054,7 @@ function createController(rootNode) {
       if (sourceGroup && sourceBase && pngExists) readyCount += 1;
 
       lines.push(
-        (i + 1) + ". " + spec.source + " over " + spec.target
+        (i + 1) + ". " + spec.source + " under " + spec.target
       );
       lines.push(
         "   source group: " +
@@ -2682,7 +3142,7 @@ function createController(rootNode) {
 
     for (let i = 0; i < traps.length; i += 1) {
       const spec = traps[i];
-      const trapLayerName = "TRAP__" + spec.source + "_over_" + spec.target;
+      const trapLayerName = "TRAP__" + spec.source + "_under_" + spec.target;
       try {
         const pngEntry = await getEntryByRelativePath(currentJobFolderEntry, spec.png);
         const group = findColorGroupInfo(doc, spec.source);
@@ -2725,7 +3185,7 @@ function createController(rootNode) {
           }
         } catch (e) {}
 
-        const sourceColor = maskColors[spec.source] || null;
+        const sourceColor = lookupMaskColor(maskColors, spec.source);
         let selectionFillDone = false;
         if (sourceColor && sourceBase) {
           try {
@@ -2926,9 +3386,11 @@ function createController(rootNode) {
       const settings = getSettings();
       lines.push(
         "Settings: preflightCleanup=" + (!!settings.preflightCleanup) +
+        ", roundTraps=" + (!!settings.roundTraps) +
         ", alphaThreshold=" + settings.alphaThreshold +
         ", edgeBiasPx=" + settings.edgeBiasPx +
         ", keyTrapPullbackPx=" + settings.keyTrapPullbackPx +
+        ", colorTrapPullbackPx=" + settings.colorTrapPullbackPx +
         ", trapPx=" + settings.trapPx
       );
     } catch (e) {
@@ -3350,7 +3812,7 @@ function createController(rootNode) {
         );
       }
       appendStatus("  bytes: " + byteLen);
-      if (target.label !== "KEY") {
+      if (PANEL_COLOR_SAMPLING_ON_RUN && target.label !== "KEY") {
         try {
           const sampled = await sampleLayerColorFromExportedPng(outFile);
           if (sampled) {
@@ -3424,7 +3886,7 @@ function createController(rootNode) {
       (
         Object.keys(maskColors).length
           ? ("mask_colors.json written (" + Object.keys(maskColors).length + " colors).\n")
-          : "mask_colors.json not written; bridge fallback sampling will be used.\n"
+          : "Ink colours will be measured by the engine (mask_colors.json).\n"
       ) +
       "Export total ms: " + elapsedMs(runStartMs)
     );
@@ -3455,6 +3917,13 @@ function createController(rootNode) {
       if (!doc) {
         throw new Error("No active document. Open a document before running the trapper.");
       }
+      try {
+        const problems = fileFormatProblems(doc);
+        if (problems.length) {
+          appendStatus("WARNING - this file is not 300 ppi RGB. Traps may be the wrong size:\n" + problems.join("\n"));
+        }
+        updateFileCheckBanner();
+      } catch (e) {}
       setRunProgress(10, "Creating snapshot");
       await createOriginalFlattenedSnapshot(doc);
       appendStatus("snapshot excluded from layer inference: " + ORIGINAL_FLATTENED_LAYER_NAME);
@@ -3562,6 +4031,33 @@ function createController(rootNode) {
       el.addEventListener("click", handler);
     };
 
+    // Save settings as soon as they change, so they survive reloads/restarts.
+    // Clicking a checkbox's text also toggles it.
+    rootNode.querySelectorAll(".check-text").forEach((t) => {
+      t.addEventListener("click", () => {
+        const box = els[t.getAttribute("data-for")];
+        if (!box) return;
+        box.checked = !box.checked;
+        persistSettingsSilently();
+      });
+    });
+
+    if (els.helpToggleBtn) {
+      els.helpToggleBtn.addEventListener("click", () => {
+        const app = rootNode.querySelector(".app");
+        const on = !app.classList.contains("show-help");
+        app.classList.toggle("show-help", on);
+        els.helpToggleBtn.textContent = on ? "Hide explanations" : "? Explain settings";
+      });
+    }
+
+    ["fullDebug", "preflightCleanup", "roundTraps", "alphaThreshold", "edgeBiasPx", "keyTrapPullbackPx", "colorTrapPullbackPx", "trapPx"].forEach((id) => {
+      const el = els[id];
+      if (!el) return;
+      el.addEventListener("change", persistSettingsSilently);
+      el.addEventListener("input", persistSettingsSilently);
+    });
+
     bindClick(els.refreshDocBtn, refreshDocumentSummary);
     bindClick(els.saveSettingsBtn, saveSettings);
     bindClick(els.editBridgeBtn, editBridgeUrl);
@@ -3579,6 +4075,7 @@ function createController(rootNode) {
     bindClick(els.saveStatusBtn, saveStatusToFile);
     bindActionWithCompletionAlert(els.manualKnockoutBtn, "Manual Progressive Knockout", runManualProgressiveKnockout);
     bindActionWithCompletionAlert(els.cutKeyBtn, "Cut Top Key From Colors", runCutTopKeyKnockout);
+    bindActionWithCompletionAlert(els.cleanColorsBtn, "Clean Colors", runCleanColors);
     bindActionWithCompletionAlert(els.runBtn, "Run Trapper", runTrapper);
   }
 
@@ -3588,6 +4085,9 @@ function createController(rootNode) {
     await rebindFolderEntriesFromSettings();
     wireEvents();
     await refreshDocumentSummary();
+    // Re-check the open document every couple of seconds (switching files,
+    // changing mode or image size all update the red banner).
+    setInterval(() => { try { updateFileCheckBanner(); } catch (e) {} }, 2000);
     setStatus("Ready.\n\nThis panel is the UXP foundation for the trapper rewrite.");
     resetRunProgress("Idle");
   }
