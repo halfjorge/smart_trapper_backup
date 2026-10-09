@@ -1,3 +1,6 @@
+> **Partly out of date (March 2026).** Start with `PROJECT_NOTES.md`. The component and workflow
+> descriptions here are still right; the status, branch and trap-layer names (now `_under_`) are not.
+
 # Smart Trapper Handbook
 
 Last updated: 2026-03-18  

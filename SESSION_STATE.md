@@ -1,3 +1,6 @@
+> **OUT OF DATE (March 2026).** Start with `PROJECT_NOTES.md`; it has the current status, plan,
+> branch (`trapper_2026_10`) and handoff steps. This file is kept for history.
+
 # Smart Trapper Session State
 
 Last updated: 2026-03-18 (America/New_York)  
