@@ -1,6 +1,6 @@
 # Smart Trapper Session State
 
-Last updated: 2026-03-17 (America/New_York)  
+Last updated: 2026-03-18 (America/New_York)  
 Branch: `trapper_active`  
 Repo root: `C:\Users\Valued Customer\Desktop\trapper`
 
@@ -22,10 +22,10 @@ This file is a concise resume point for a new Codex chat so it can immediately c
    - `cd C:\Users\Valued Customer\Desktop\trapper\UXP_Trapper`
    - `python .\real_bridge.py`
 2. In Photoshop panel:
+   - optionally `Cut Top Key From Colors` if you need to knock only the key out of lower colors
    - optionally `Manual Progressive Knockout` first for non-knocked-out files
    - `Run Trapper`
    - `Prepare Import Structure`
-   - `Build Import Plan`
    - `Import Traps`
 3. Use `Save Status Snapshot` after major actions.
 
@@ -36,10 +36,20 @@ This file is a concise resume point for a new Codex chat so it can immediately c
   - `C:\Users\Valued Customer\Desktop\trapper\UXP_Trapper\status_logs`
 
 ## Current Status
-- `Run Trapper` creates/refreshes hidden `__ORIGINAL_FLATTENED__` and excludes it from inference/grouping.
+- The visible UXP panel is intentionally reduced to run settings, core action buttons, and status/save-status.
+- `Run Trapper` creates/refreshes hidden `__ORIGINAL_FLATTENED__`, excludes it from inference/grouping, and now forces snapshot creation from the top of the layer stack regardless of active-layer selection.
+- The panel now shows a phase-based real-time progress bar during `Run Trapper`.
 - `Prepare Import Structure` can build CLEAN layers successfully from `clean_masks/*.png` when the selected run folder matches the run.
 - If `clean_masks/` is missing in the selected run folder, prepare falls back to in-document alpha-threshold CLEAN build.
 - `Manual Progressive Knockout` now works and performs the manual top-down knockout sequence before trapping when needed.
+- `Cut Top Key From Colors` is now a separate Photoshop-side action button that clears only the top key out of lower visible color layers.
+- The old `Cut top key layer out of visible colors` run-setting checkbox path was removed.
+- Current verified opaque-job good run:
+  - `UXP_Trapper/status_logs/smart_trapper_status_2026-03-18T12-37-06-338Z.txt`
+  - `CLEAN built: 4`
+  - `Placed: 10`
+  - `Failed: 0`
+  - `Original layers hidden: 4`
 - Current verified manual knockout success log:
   - `UXP_Trapper/status_logs/smart_trapper_status_2026-03-17T17-51-11-771Z.txt`
   - `Applied: true`

@@ -10,13 +10,11 @@ const DEFAULT_LOG_FOLDER = "C:\\Users\\Valued Customer\\Desktop\\trapper\\UXP_Tr
 
 const DEFAULTS = {
   fullDebug: false,
-  cutTopKey: false,
   preflightCleanup: false,
   alphaThreshold: 8,
   edgeBiasPx: 0,
   keyTrapPullbackPx: 1,
   trapPx: 5,
-  mode: "auto",
   bridgeUrl: "http://127.0.0.1:8765",
   jobFolder: DEFAULT_JOB_FOLDER,
   logFolder: DEFAULT_LOG_FOLDER
@@ -25,31 +23,12 @@ const DEFAULTS = {
 function panelMarkup() {
   return `
     <div class="app">
-      <div class="hero">
-        <div class="eyebrow">Photoshop UXP Panel</div>
-        <div class="hero-title">Smart Trapper</div>
-        <div class="hero-copy">Single-panel control surface for the existing trapper workflow. This panel stores settings, inspects the active document, and is prepared to hand jobs to a local bridge service.</div>
-      </div>
-
-      <div class="panel">
-        <div class="section-title">Document</div>
-        <button id="refreshDocBtn" class="button secondary">Refresh</button>
-        <div id="docSummary" class="summary">No document loaded.</div>
-        <div id="layerSummary" class="summary subtle">Waiting for analysis.</div>
-      </div>
-
       <div class="panel">
         <div class="section-title">Run Settings</div>
         <div class="setting-box">
           <label>
             <input id="fullDebug" type="checkbox">
             <span>Full debug logging</span>
-          </label>
-        </div>
-        <div class="setting-box">
-          <label>
-            <input id="cutTopKey" type="checkbox">
-            <span>Cut top key layer out of visible colors</span>
           </label>
         </div>
         <div class="setting-box">
@@ -74,62 +53,47 @@ function panelMarkup() {
           <div class="field-label">Trap width (px)</div>
           <input id="trapPx" type="number" min="0" step="1">
         </div>
-        <div class="field">
-          <div class="field-label">Mode</div>
-          <select id="mode">
-            <option value="auto">Auto detect</option>
-            <option value="plates">Plates</option>
-            <option value="overprint">Overprint</option>
-          </select>
-        </div>
-      </div>
-
-      <div class="panel">
-        <div class="section-title">Bridge</div>
-        <div class="field">
-          <div class="field-label">Bridge URL</div>
-          <div id="bridgeUrlDisplay" class="bridge-display"></div>
-        </div>
-        <div class="field">
-          <div class="field-label">Existing Job Folder</div>
-          <div id="jobFolderDisplay" class="bridge-display muted"></div>
-        </div>
-        <button id="editBridgeBtn" class="button secondary">Edit URL</button>
-        <button id="selectJobFolderBtn" class="button secondary">Select Job Folder</button>
-        <button id="clearJobFolderBtn" class="button secondary">Clear Job Folder</button>
-        <button id="testBridgeBtn" class="button secondary">Test Bridge</button>
-        <button id="saveSettingsBtn" class="button secondary">Save Settings</button>
-        <div class="hint">The bridge can already run the Rust engine on an existing exported job folder. Full Photoshop export/import parity will be wired into this panel next.</div>
-      </div>
-
-      <div class="panel">
-        <div class="section-title">Logs</div>
-        <div class="field">
-          <div class="field-label">Snapshot Log Folder</div>
-          <div id="logFolderDisplay" class="bridge-display muted"></div>
-        </div>
-        <button id="selectLogFolderBtn" class="button secondary">Select Log Folder</button>
-        <button id="clearLogFolderBtn" class="button secondary">Clear Log Folder</button>
       </div>
 
       <div class="panel">
         <div class="section-title">Actions</div>
-        <button id="runBtn" class="button primary full">Run Trapper</button>
         <button id="manualKnockoutBtn" class="button secondary full">Manual Progressive Knockout</button>
-        <button id="exportMasksBtn" class="button secondary full">Export Masks To Job Folder</button>
+        <button id="cutKeyBtn" class="button secondary full">Cut Top Key From Colors</button>
+        <button id="runBtn" class="button primary full">Run Trapper</button>
         <button id="prepareImportBtn" class="button secondary full">Prepare Import Structure</button>
-        <button id="importPlanBtn" class="button secondary full">Build Import Plan</button>
         <button id="importTrapsBtn" class="button secondary full">Import Traps</button>
-        <button id="createJobBtn" class="button secondary full">Create Job Folder Skeleton</button>
-        <button id="exportConfigBtn" class="button secondary full">Export Settings Snapshot</button>
       </div>
 
       <div class="panel">
         <div class="section-title">Status</div>
         <button id="saveStatusBtn" class="button secondary">Save Status Snapshot</button>
+        <div id="runProgressShell" style="margin-top:10px;">
+          <div id="runProgressLabel" style="font-size:11px; opacity:0.8; margin-bottom:4px;">Idle</div>
+          <progress id="runProgressBar" max="100" value="0" style="width:100%; height:14px;"></progress>
+        </div>
         <div class="status-shell">
           <div id="status" class="status" tabindex="0"></div>
         </div>
+      </div>
+
+      <div style="display:none;">
+        <button id="refreshDocBtn"></button>
+        <button id="editBridgeBtn"></button>
+        <button id="selectJobFolderBtn"></button>
+        <button id="clearJobFolderBtn"></button>
+        <button id="selectLogFolderBtn"></button>
+        <button id="clearLogFolderBtn"></button>
+        <button id="testBridgeBtn"></button>
+        <button id="saveSettingsBtn"></button>
+        <button id="exportMasksBtn"></button>
+        <button id="importPlanBtn"></button>
+        <button id="createJobBtn"></button>
+        <button id="exportConfigBtn"></button>
+        <div id="docSummary"></div>
+        <div id="layerSummary"></div>
+        <div id="bridgeUrlDisplay"></div>
+        <div id="jobFolderDisplay"></div>
+        <div id="logFolderDisplay"></div>
       </div>
     </div>
   `;
@@ -154,13 +118,11 @@ function createController(rootNode) {
     [
       "refreshDocBtn",
       "fullDebug",
-      "cutTopKey",
       "preflightCleanup",
       "alphaThreshold",
       "edgeBiasPx",
       "keyTrapPullbackPx",
       "trapPx",
-      "mode",
       "bridgeUrlDisplay",
       "jobFolderDisplay",
       "logFolderDisplay",
@@ -173,12 +135,16 @@ function createController(rootNode) {
       "saveSettingsBtn",
       "runBtn",
       "manualKnockoutBtn",
+      "cutKeyBtn",
       "exportMasksBtn",
       "prepareImportBtn",
       "importPlanBtn",
       "importTrapsBtn",
       "createJobBtn",
       "exportConfigBtn",
+      "runProgressShell",
+      "runProgressLabel",
+      "runProgressBar",
       "docSummary",
       "layerSummary",
       "saveStatusBtn",
@@ -206,6 +172,21 @@ function createController(rootNode) {
     } catch (e) {}
   }
 
+  function setRunProgress(value, label) {
+    const pct = Math.max(0, Math.min(100, Math.round(Number(value || 0))));
+    if (els.runProgressBar) {
+      els.runProgressBar.value = pct;
+    }
+    if (els.runProgressLabel) {
+      const suffix = label ? (" - " + String(label)) : "";
+      els.runProgressLabel.textContent = pct + "%" + suffix;
+    }
+  }
+
+  function resetRunProgress(label) {
+    setRunProgress(0, label || "Idle");
+  }
+
   function nowMs() {
     return Date.now();
   }
@@ -228,6 +209,7 @@ function createController(rootNode) {
   }
 
   function bindActionWithCompletionAlert(el, label, handler) {
+    if (!el) return;
     el.addEventListener("click", async () => {
       try {
         await handler();
@@ -245,13 +227,11 @@ function createController(rootNode) {
     };
     return {
       fullDebug: !!els.fullDebug.checked,
-      cutTopKey: !!els.cutTopKey.checked,
       preflightCleanup: !!els.preflightCleanup.checked,
       alphaThreshold: Number(els.alphaThreshold.value || DEFAULTS.alphaThreshold),
       edgeBiasPx: Number(els.edgeBiasPx.value || DEFAULTS.edgeBiasPx),
       keyTrapPullbackPx: Number(els.keyTrapPullbackPx.value || DEFAULTS.keyTrapPullbackPx),
       trapPx: Number(els.trapPx.value || DEFAULTS.trapPx),
-      mode: els.mode.value || DEFAULTS.mode,
       bridgeUrl: String(els.bridgeUrlDisplay.textContent || DEFAULTS.bridgeUrl).trim(),
       jobFolder: normalizeFolderDisplayValue(els.jobFolderDisplay.textContent, DEFAULTS.jobFolder),
       logFolder: normalizeFolderDisplayValue(els.logFolderDisplay.textContent, DEFAULTS.logFolder)
@@ -261,13 +241,11 @@ function createController(rootNode) {
   function applySettings(settings) {
     const s = Object.assign({}, DEFAULTS, settings || {});
     els.fullDebug.checked = !!s.fullDebug;
-    els.cutTopKey.checked = !!s.cutTopKey;
     els.preflightCleanup.checked = !!s.preflightCleanup;
     els.alphaThreshold.value = String(s.alphaThreshold);
     els.edgeBiasPx.value = String(s.edgeBiasPx);
     els.keyTrapPullbackPx.value = String(s.keyTrapPullbackPx);
     els.trapPx.value = String(s.trapPx);
-    els.mode.value = s.mode;
     els.bridgeUrlDisplay.textContent = s.bridgeUrl;
     els.jobFolderDisplay.textContent = String(s.jobFolder || "").trim() || DEFAULTS.jobFolder;
     els.logFolderDisplay.textContent = String(s.logFolder || "").trim() || DEFAULTS.logFolder;
@@ -472,15 +450,18 @@ function createController(rootNode) {
     let fillOpacity = 100;
     let visible = true;
     let kind = "(unknown)";
+    let layerId = null;
 
     try { blendMode = String(layer.blendMode); } catch (e) {}
     try { opacity = Number(layer.opacity); } catch (e) {}
     try { fillOpacity = Number(layer.fillOpacity); } catch (e) {}
     try { visible = !!layer.visible; } catch (e) {}
     try { kind = String(layer.kind); } catch (e) {}
+    try { layerId = layerIdOf(layer); } catch (e) {}
 
     return {
       index,
+      layerId,
       name: layer.name,
       kind,
       visible,
@@ -511,7 +492,6 @@ function createController(rootNode) {
         widthPx: Math.round(Number(doc.width)),
         heightPx: Math.round(Number(doc.height)),
         resolution: Number(doc.resolution),
-        cutTopKey: !!getSettings().cutTopKey,
         preflightCleanup: !!getSettings().preflightCleanup,
         alphaThreshold: Number(getSettings().alphaThreshold || DEFAULTS.alphaThreshold),
         edgeBiasPx: Number(getSettings().edgeBiasPx || DEFAULTS.edgeBiasPx),
@@ -554,6 +534,7 @@ function createController(rootNode) {
     return {
       job,
       topLevelLayers: layers.map((entry) => entry.meta),
+      orderedColorLayersBottomToTop: colorLayersBottomToTop.map((entry) => entry.meta),
       inferred: {
         topKeyLayer: keyLayer ? keyLayer.meta.name : null,
         bottomPaperLayer: paperLayer ? paperLayer.meta.name : null,
@@ -1224,6 +1205,14 @@ function createController(rootNode) {
       appendStatus("snapshot deleted: " + ORIGINAL_FLATTENED_LAYER_NAME);
     }
 
+    const topLayerId = layers.length ? Number(layerIdOf(layers[0]) || 0) : 0;
+    if (topLayerId) {
+      const selectTop = await selectLayerById(topLayerId, "Select Top Layer Before Snapshot");
+      if (batchPlayResultHasError(selectTop)) {
+        throw new Error("Top-layer select before snapshot failed\n" + summarizeBatchPlayResult(selectTop));
+      }
+    }
+
     await core.executeAsModal(async () => {
       return await action.batchPlay(
         [{
@@ -1353,6 +1342,108 @@ function createController(rootNode) {
       appendStatus("Manual progressive knockout failed.\n" + String(e));
       try {
         if (e && e.stack) appendStatus("Manual progressive knockout stack:\n" + String(e.stack));
+      } catch (stackErr) {}
+    }
+  }
+
+  async function applyTopKeyKnockoutInPhotoshop(doc) {
+    const inference = getTopLevelEntriesExcludingSnapshot(doc);
+    const layers = inference.entries || [];
+    if (layers.length < 3) {
+      appendStatus("top key knockout: skipped (not enough top-level layers)");
+      return { applied: false, operations: 0, keyName: null };
+    }
+
+    const knockable = layers.filter((entry) => {
+      if (!entry || !entry.meta) return false;
+      if (!entry.meta.visible) return false;
+      if (entry.meta.kind === "group") return false;
+      return true;
+    });
+
+    if (knockable.length < 3) {
+      appendStatus("top key knockout: skipped (need key, at least one color, and paper)");
+      return { applied: false, operations: 0, keyName: null };
+    }
+
+    const key = knockable[0];
+    const paper = knockable[knockable.length - 1];
+    const keyId = Number(layerIdOf(key && key.layer) || 0);
+    if (!keyId) {
+      throw new Error("Top key knockout could not resolve key layer ID");
+    }
+
+    let operations = 0;
+    appendStatus("top key knockout: Photoshop-side knockout start");
+    appendStatus("  key source: " + key.meta.name);
+    appendStatus("  paper preserved: " + paper.meta.name);
+
+    try {
+      for (let destIdx = 1; destIdx < knockable.length - 1; destIdx += 1) {
+        const dest = knockable[destIdx];
+        const destId = Number(layerIdOf(dest && dest.layer) || 0);
+        if (!destId) continue;
+
+        const selectResult = await loadSelectionFromLayerTransparencyById(
+          keyId,
+          "Load Top Key Knockout Selection"
+        );
+        if (batchPlayResultHasError(selectResult)) {
+          throw new Error(
+            "top key knockout selection failed for " +
+            key.meta.name + " -> " + dest.meta.name + "\n" +
+            summarizeBatchPlayResult(selectResult)
+          );
+        }
+
+        const clearResult = await clearSelectionOnLayerById(
+          destId,
+          "Top Key Knockout Clear Underlying Layer"
+        );
+        if (batchPlayResultHasError(clearResult)) {
+          throw new Error(
+            "top key knockout clear failed for " +
+            key.meta.name + " -> " + dest.meta.name + "\n" +
+            summarizeBatchPlayResult(clearResult)
+          );
+        }
+
+        operations += 1;
+        appendStatus("  knocked out key: " + key.meta.name + " -> " + dest.meta.name);
+      }
+    } finally {
+      try { await deselectSelection(); } catch (e) {}
+    }
+
+    appendStatus("top key knockout: Photoshop-side knockout complete (" + operations + " clears)");
+    return { applied: operations > 0, operations, keyName: key.meta.name };
+  }
+
+  async function runCutTopKeyKnockout() {
+    try {
+      appendStatus(statusStamp("Cut Top Key From Colors"));
+      let doc = null;
+      try {
+        doc = app.activeDocument;
+      } catch (e) {
+        doc = null;
+      }
+      if (!doc) {
+        throw new Error("No active document. Open a document before cutting the top key from colors.");
+      }
+      const startMs = nowMs();
+      const result = await applyTopKeyKnockoutInPhotoshop(doc);
+      appendStatus(
+        "Top key knockout complete.\n" +
+        "Applied: " + (!!result.applied) + "\n" +
+        "Key: " + String(result.keyName || "(none)") + "\n" +
+        "Clears: " + Number(result.operations || 0) + "\n" +
+        "Elapsed ms: " + elapsedMs(startMs)
+      );
+    } catch (e) {
+      appendStatus("Top key knockout failed.\n" + String(e));
+      try {
+        if (e && e.stack) appendStatus("Top key knockout stack:\n" + String(e.stack));
       } catch (stackErr) {}
     }
   }
@@ -1874,9 +1965,11 @@ function createController(rootNode) {
     return findArtLayerByNameInfo(sourceGroup, sourceName);
   }
 
-  async function exportSingleMaskPng(sourceDoc, targetIndex, fileEntry) {
+  async function exportSingleMaskPng(sourceDoc, targetMeta, fileEntry) {
+    const targetIndex = Number(targetMeta && targetMeta.index);
+    const targetName = String((targetMeta && targetMeta.name) || "");
     const outPath = (fileEntry && (fileEntry.nativePath || fileEntry.name)) || "(unknown)";
-    appendStatus("[mask-export] begin targetIndex=" + targetIndex + " file=" + outPath + " engine=" + EXPORT_ENGINE_VERSION);
+    appendStatus("[mask-export] begin targetIndex=" + targetIndex + " targetName=" + targetName + " file=" + outPath + " engine=" + EXPORT_ENGINE_VERSION);
     await core.executeAsModal(async () => {
       const duplicate = await sourceDoc.duplicate();
       let previousActive = null;
@@ -1892,15 +1985,35 @@ function createController(rootNode) {
 
         const dupLayers = flattenTopLevelLayers(duplicate);
         appendStatus("[mask-export] duplicate doc created; layerCount=" + dupLayers.length);
+        appendStatus("[mask-export] duplicate layers:\n" + dupLayers.map((layer, idx) => {
+          return "  [" + idx + "] " + String(layer && layer.name);
+        }).join("\n"));
         try {
           appendStatus("[mask-export] duplicate mode(before): " + String(duplicate.mode));
         } catch (e) {}
+        let targetLayer = null;
+        if (!Number.isNaN(targetIndex) && targetIndex >= 0 && targetIndex < dupLayers.length) {
+          targetLayer = dupLayers[targetIndex] || null;
+        }
+        if (targetLayer && targetName && String(targetLayer.name) !== targetName) {
+          appendStatus("[mask-export] index/name mismatch: index " + targetIndex + " => " + String(targetLayer.name) + " (expected " + targetName + ")");
+          targetLayer = null;
+        }
+        if (!targetLayer && targetName) {
+          targetLayer = dupLayers.find((layer) => String(layer && layer.name) === targetName) || null;
+          if (targetLayer) {
+            appendStatus("[mask-export] recovered target layer by name: " + targetName);
+          }
+        }
+        if (!targetLayer) {
+          throw new Error("Could not resolve duplicate target layer for " + (targetName || ("index " + targetIndex)));
+        }
         for (let i = 0; i < dupLayers.length; i += 1) {
           try {
-            dupLayers[i].visible = i === targetIndex;
+            dupLayers[i].visible = dupLayers[i] === targetLayer;
           } catch (e) {}
         }
-        appendStatus("[mask-export] isolated visibility applied at index=" + targetIndex);
+        appendStatus("[mask-export] isolated visibility applied to " + String(targetLayer.name));
 
         // PNG export is reliable only when the temp export doc is RGB-compatible.
         try {
@@ -1984,28 +2097,153 @@ function createController(rootNode) {
     return 0;
   }
 
-  async function sampleLayerColorByTopIndex(sourceDoc, targetIndex) {
+  async function sampleLayerColorFromExportedPng(fileEntry) {
+    function rgbFromSample(sample) {
+      if (!sample || !sample.rgb) return null;
+      return {
+        r: Math.round(Number(sample.rgb.red || 0)),
+        g: Math.round(Number(sample.rgb.green || 0)),
+        b: Math.round(Number(sample.rgb.blue || 0))
+      };
+    }
+
+    function rgbKey(rgb) {
+      if (!rgb) return "";
+      return [rgb.r, rgb.g, rgb.b].join(",");
+    }
+
+    async function samplePoint(x, y) {
+      const sampleResult = await action.batchPlay(
+        [{
+          _obj: "colorSampler",
+          samplePoint: {
+            horizontal: { _unit: "pixelsUnit", _value: x },
+            vertical: { _unit: "pixelsUnit", _value: y }
+          }
+        }],
+        {}
+      );
+      return rgbFromSample(sampleResult && sampleResult[0] && sampleResult[0].sampledData);
+    }
+
     return await core.executeAsModal(async () => {
-      const duplicate = await sourceDoc.duplicate();
+      const openedDoc = await app.open(fileEntry);
+      let previousActive = null;
       try {
-        const dupLayers = flattenTopLevelLayers(duplicate);
-        for (let i = 0; i < dupLayers.length; i += 1) {
+        try {
+          previousActive = app.activeDocument || null;
+        } catch (e) {
+          previousActive = null;
+        }
+        try {
+          app.activeDocument = openedDoc;
+        } catch (e) {}
+
+        const docLayers = flattenTopLevelLayers(openedDoc);
+        const targetLayer = docLayers.find((layer) => isArtLikeLayer(layer)) || docLayers[0] || null;
+        const targetLayerId = Number(layerIdOf(targetLayer) || 0);
+        const sentinelRgb = { r: 1, g: 2, b: 3 };
+
+        if (targetLayerId) {
           try {
-            dupLayers[i].visible = i === targetIndex;
+            await action.batchPlay(
+              [{
+                _obj: "select",
+                _target: [{ _ref: "layer", _id: targetLayerId }],
+                makeVisible: false,
+                _options: { dialogOptions: "dontDisplay" }
+              }],
+              {}
+            );
+
+            await action.batchPlay(
+              [{
+                _obj: "make",
+                _target: [{ _ref: "layer" }],
+                using: {
+                  _obj: "layer",
+                  name: "__SAMPLE_BG__"
+                },
+                _options: { dialogOptions: "dontDisplay" }
+              }],
+              {}
+            );
+
+            await action.batchPlay(
+              [{
+                _obj: "fill",
+                using: { _enum: "fillContents", _value: "color" },
+                color: {
+                  _obj: "RGBColor",
+                  red: sentinelRgb.r,
+                  green: sentinelRgb.g,
+                  blue: sentinelRgb.b
+                },
+                opacity: { _unit: "percentUnit", _value: 100 },
+                mode: { _enum: "blendMode", _value: "normal" },
+                _options: { dialogOptions: "dontDisplay" }
+              }],
+              {}
+            );
+
+            await action.batchPlay(
+              [{
+                _obj: "move",
+                _target: [{ _ref: "layer", _enum: "ordinal", _value: "targetEnum" }],
+                to: { _ref: "layer", _enum: "ordinal", _value: "back" },
+                adjustment: false,
+                _options: { dialogOptions: "dontDisplay" }
+              }],
+              {}
+            );
+
+            await action.batchPlay(
+              [{
+                _obj: "select",
+                _target: [{ _ref: "layer", _id: targetLayerId }],
+                makeVisible: false,
+                _options: { dialogOptions: "dontDisplay" }
+              }],
+              {}
+            );
           } catch (e) {}
         }
 
-        const boundsResult = await action.batchPlay(
-          [{
-            _obj: "get",
-            _target: [{ _ref: "layer", _index: targetIndex + 1 }],
-            _options: { dialogOptions: "dontDisplay" }
-          }],
-          {}
-        );
+        if (!targetLayerId) {
+          return null;
+        }
 
-        const desc = (boundsResult && boundsResult[0]) || {};
-        const rawBounds = desc.boundsNoEffects || desc.bounds || null;
+        let rawBounds = null;
+        try {
+          await loadSelectionFromLayerTransparencyById(targetLayerId, "Load Sample Layer Transparency");
+          try {
+            const selBounds = openedDoc.selection && openedDoc.selection.bounds;
+            if (selBounds && selBounds.length >= 4) {
+              rawBounds = {
+                left: Number(selBounds[0]?._value || selBounds[0] || 0),
+                top: Number(selBounds[1]?._value || selBounds[1] || 0),
+                right: Number(selBounds[2]?._value || selBounds[2] || 0),
+                bottom: Number(selBounds[3]?._value || selBounds[3] || 0)
+              };
+            }
+          } catch (e) {}
+        } catch (e) {}
+        try { await deselectSelection(); } catch (e) {}
+
+        if (!rawBounds) {
+          const boundsResult = await action.batchPlay(
+            [{
+              _obj: "get",
+              _target: [{ _ref: "layer", _id: targetLayerId }],
+              _options: { dialogOptions: "dontDisplay" }
+            }],
+            {}
+          );
+
+          const desc = (boundsResult && boundsResult[0]) || {};
+          rawBounds = desc.boundsNoEffects || desc.bounds || null;
+        }
+
         if (!rawBounds) {
           return null;
         }
@@ -2014,40 +2252,56 @@ function createController(rootNode) {
         const top = Math.max(0, Math.round(Number(rawBounds.top?._value || rawBounds.top || 0)));
         const right = Math.max(left + 1, Math.round(Number(rawBounds.right?._value || rawBounds.right || 0)));
         const bottom = Math.max(top + 1, Math.round(Number(rawBounds.bottom?._value || rawBounds.bottom || 0)));
-        const sampleX = Math.max(left, Math.min(right - 1, Math.round((left + right) / 2)));
-        const sampleY = Math.max(top, Math.min(bottom - 1, Math.round((top + bottom) / 2)));
 
-        const sampleResult = await action.batchPlay(
-          [{
-            _obj: "colorSampler",
-            samplePoint: {
-              horizontal: { _unit: "pixelsUnit", _value: sampleX },
-              vertical: { _unit: "pixelsUnit", _value: sampleY }
+        const backgroundKey = rgbKey(sentinelRgb);
+
+        const hits = {};
+        const sampleCols = 21;
+        const sampleRows = 21;
+        for (let row = 0; row < sampleRows; row += 1) {
+          for (let col = 0; col < sampleCols; col += 1) {
+            const fx = sampleCols === 1 ? 0.5 : (col / (sampleCols - 1));
+            const fy = sampleRows === 1 ? 0.5 : (row / (sampleRows - 1));
+            const x = Math.max(left, Math.min(right - 1, Math.round(left + ((right - left - 1) * fx))));
+            const y = Math.max(top, Math.min(bottom - 1, Math.round(top + ((bottom - top - 1) * fy))));
+            let rgb = null;
+            try {
+              rgb = await samplePoint(x, y);
+            } catch (e) {}
+            if (!rgb) continue;
+            const key = rgbKey(rgb);
+            if (!key) continue;
+            if (backgroundKey && key === backgroundKey) continue;
+            if (!hits[key]) {
+              hits[key] = { rgb, count: 0 };
             }
-          }],
-          {}
-        );
-
-        const sample = (sampleResult && sampleResult[0] && sampleResult[0].sampledData) || null;
-        if (!sample || !sample.rgb) {
-          return null;
+            hits[key].count += 1;
+          }
         }
 
-        return {
-          r: Math.round(Number(sample.rgb.red || 0)),
-          g: Math.round(Number(sample.rgb.green || 0)),
-          b: Math.round(Number(sample.rgb.blue || 0))
-        };
+        const ranked = Object.keys(hits)
+          .map((key) => hits[key])
+          .sort((a, b) => b.count - a.count);
+        if (ranked.length) {
+          return ranked[0].rgb;
+        }
+
+        const sampleX = Math.max(left, Math.min(right - 1, Math.round((left + right) / 2)));
+        const sampleY = Math.max(top, Math.min(bottom - 1, Math.round((top + bottom) / 2)));
+        return await samplePoint(sampleX, sampleY);
       } finally {
         try {
-          await duplicate.closeWithoutSaving();
+          if (previousActive) app.activeDocument = previousActive;
+        } catch (e) {}
+        try {
+          await openedDoc.closeWithoutSaving();
         } catch (e) {
           try {
-            await duplicate.close(constants.SaveOptions.DONOTSAVECHANGES);
+            await openedDoc.close(constants.SaveOptions.DONOTSAVECHANGES);
           } catch (e2) {}
         }
       }
-    }, { commandName: "Sample Smart Trapper Layer Color" });
+    }, { commandName: "Sample Smart Trapper Exported PNG Color" });
   }
 
   function isArtLikeLayer(layer) {
@@ -2675,8 +2929,7 @@ function createController(rootNode) {
         ", alphaThreshold=" + settings.alphaThreshold +
         ", edgeBiasPx=" + settings.edgeBiasPx +
         ", keyTrapPullbackPx=" + settings.keyTrapPullbackPx +
-        ", trapPx=" + settings.trapPx +
-        ", mode=" + settings.mode
+        ", trapPx=" + settings.trapPx
       );
     } catch (e) {
       lines.push("Settings: (unavailable) " + String(e));
@@ -2953,22 +3206,23 @@ function createController(rootNode) {
     if (spec.topLevelLayers.length) {
       exportTargets.push({
         index: Number(spec.topLevelLayers[0].index),
+        name: spec.topLevelLayers[0].name,
         fileName: "KEY_" + sanitize(spec.topLevelLayers[0].name) + ".png",
         label: "KEY",
         layerName: spec.topLevelLayers[0].name
       });
     }
 
-    const colorNames = spec.inferred.visibleColorLayersBottomToTop || [];
-    for (let i = 0; i < colorNames.length; i += 1) {
-      const layerName = colorNames[i];
-      const topLayerMeta = spec.topLevelLayers.find((layer) => layer.name === layerName);
+    const orderedColorLayers = spec.orderedColorLayersBottomToTop || [];
+    for (let i = 0; i < orderedColorLayers.length; i += 1) {
+      const topLayerMeta = orderedColorLayers[i];
       if (!topLayerMeta) continue;
       exportTargets.push({
         index: Number(topLayerMeta.index),
-        fileName: (i + 1) + "_" + sanitize(layerName) + ".png",
+        name: topLayerMeta.name,
+        fileName: (i + 1) + "_" + sanitize(topLayerMeta.name) + ".png",
         label: String(i + 1),
-        layerName
+        layerName: topLayerMeta.name
       });
     }
 
@@ -3020,7 +3274,7 @@ function createController(rootNode) {
     }
   }
 
-  async function exportMasksToJobFolderForRun() {
+  async function exportMasksToJobFolderForRun(progressCallback) {
     const runStartMs = nowMs();
     let doc = null;
     try {
@@ -3044,22 +3298,23 @@ function createController(rootNode) {
     if (spec.topLevelLayers.length) {
       exportTargets.push({
         index: Number(spec.topLevelLayers[0].index),
+        name: spec.topLevelLayers[0].name,
         fileName: "KEY_" + sanitize(spec.topLevelLayers[0].name) + ".png",
         label: "KEY",
         layerName: spec.topLevelLayers[0].name
       });
     }
 
-    const colorNames = spec.inferred.visibleColorLayersBottomToTop || [];
-    for (let i = 0; i < colorNames.length; i += 1) {
-      const layerName = colorNames[i];
-      const topLayerMeta = spec.topLevelLayers.find((layer) => layer.name === layerName);
+    const orderedColorLayers = spec.orderedColorLayersBottomToTop || [];
+    for (let i = 0; i < orderedColorLayers.length; i += 1) {
+      const topLayerMeta = orderedColorLayers[i];
       if (!topLayerMeta) continue;
       exportTargets.push({
         index: Number(topLayerMeta.index),
-        fileName: (i + 1) + "_" + sanitize(layerName) + ".png",
+        name: topLayerMeta.name,
+        fileName: (i + 1) + "_" + sanitize(topLayerMeta.name) + ".png",
         label: String(i + 1),
-        layerName
+        layerName: topLayerMeta.name
       });
     }
 
@@ -3071,11 +3326,20 @@ function createController(rootNode) {
       statusLines.push("Export engine: " + EXPORT_ENGINE_VERSION);
       setStatus(statusLines.join("\n"));
 
-    for (const target of exportTargets) {
+    if (typeof progressCallback === "function") {
+      progressCallback(30, "Preparing export");
+    }
+
+    for (let exportIdx = 0; exportIdx < exportTargets.length; exportIdx += 1) {
+      const target = exportTargets[exportIdx];
       const maskStartMs = nowMs();
       const outFile = await masksFolder.createFile(target.fileName, { overwrite: true });
       appendStatus("Exporting " + target.label + ": " + target.layerName);
-      await exportSingleMaskPng(doc, target.index, outFile);
+      if (typeof progressCallback === "function") {
+        const exportPct = 35 + Math.round((exportIdx / Math.max(1, exportTargets.length)) * 35);
+        progressCallback(exportPct, "Exporting " + target.layerName);
+      }
+      await exportSingleMaskPng(doc, target, outFile);
       const byteLen = await waitForNonZeroFileBytes(outFile, 12, 160);
       if (byteLen <= 0) {
         throw new Error(
@@ -3088,7 +3352,7 @@ function createController(rootNode) {
       appendStatus("  bytes: " + byteLen);
       if (target.label !== "KEY") {
         try {
-          const sampled = await sampleLayerColorByTopIndex(doc, target.index);
+          const sampled = await sampleLayerColorFromExportedPng(outFile);
           if (sampled) {
             maskColors[target.layerName] = sampled;
             appendStatus("  sampled RGB: (" + sampled.r + "," + sampled.g + "," + sampled.b + ")");
@@ -3100,6 +3364,10 @@ function createController(rootNode) {
         }
       }
       appendStatus("  export time ms: " + elapsedMs(maskStartMs));
+      if (typeof progressCallback === "function") {
+        const exportPct = 35 + Math.round(((exportIdx + 1) / Math.max(1, exportTargets.length)) * 35);
+        progressCallback(exportPct, "Exported " + target.layerName);
+      }
     }
 
     let maskEntries = [];
@@ -3145,6 +3413,9 @@ function createController(rootNode) {
     if (Object.keys(maskColors).length) {
       await writeJsonFile(runFolder, "mask_colors.json", maskColors);
     }
+    if (typeof progressCallback === "function") {
+      progressCallback(75, "Export complete");
+    }
 
     appendStatus(
       "Export complete.\n" +
@@ -3171,6 +3442,7 @@ function createController(rootNode) {
   async function runTrapper() {
     try {
       const runStartMs = nowMs();
+      setRunProgress(0, "Starting");
       appendStatus(statusStamp("Run Trapper"));
       appendStatus("Run start: " + new Date(runStartMs).toISOString());
       appendStatus("Export engine: " + EXPORT_ENGINE_VERSION);
@@ -3183,10 +3455,12 @@ function createController(rootNode) {
       if (!doc) {
         throw new Error("No active document. Open a document before running the trapper.");
       }
+      setRunProgress(10, "Creating snapshot");
       await createOriginalFlattenedSnapshot(doc);
       appendStatus("snapshot excluded from layer inference: " + ORIGINAL_FLATTENED_LAYER_NAME);
       const bridgeBase = getSettings().bridgeUrl.replace(/\/$/, "");
       try {
+        setRunProgress(20, "Checking bridge");
         const healthStart = nowMs();
         const healthResp = await fetch(bridgeBase + "/health");
         const healthText = await healthResp.text();
@@ -3196,7 +3470,7 @@ function createController(rootNode) {
         appendStatus("Bridge health preflight failed:\n" + String(healthErr));
       }
       const exportPhaseStartMs = nowMs();
-      const exported = await exportMasksToJobFolderForRun();
+      const exported = await exportMasksToJobFolderForRun(setRunProgress);
       appendStatus("Run phase timing: export+job-write ms = " + elapsedMs(exportPhaseStartMs));
       const payload = {
         generatedAt: new Date().toISOString(),
@@ -3213,6 +3487,7 @@ function createController(rootNode) {
         JSON.stringify(payload, null, 2)
       );
 
+      setRunProgress(85, "Running engine");
       const bridgePhaseStartMs = nowMs();
       const response = await fetch(payload.settings.bridgeUrl.replace(/\/$/, "") + "/run", {
         method: "POST",
@@ -3252,6 +3527,7 @@ function createController(rootNode) {
         } catch (e) {}
       }
 
+      setRunProgress(95, "Verifying outputs");
       appendStatus("Run job folder:\n" + resolvedJobFolder);
 
       let maskColorsExists = false;
@@ -3270,7 +3546,9 @@ function createController(rootNode) {
         (maskColorsPath ? ("\npath: " + maskColorsPath) : "")
       );
       appendStatus("Run total ms: " + elapsedMs(runStartMs));
+      setRunProgress(100, "Complete");
     } catch (e) {
+      setRunProgress(100, "Failed");
       appendStatus("Run Trapper failed.\n" + String(e));
       try {
         if (e && e.stack) appendStatus("Run Trapper stack:\n" + String(e.stack));
@@ -3279,22 +3557,28 @@ function createController(rootNode) {
   }
 
   function wireEvents() {
-    els.refreshDocBtn.addEventListener("click", refreshDocumentSummary);
-    els.saveSettingsBtn.addEventListener("click", saveSettings);
-    els.editBridgeBtn.addEventListener("click", editBridgeUrl);
-    els.selectJobFolderBtn.addEventListener("click", selectJobFolder);
-    els.clearJobFolderBtn.addEventListener("click", clearJobFolder);
-    els.selectLogFolderBtn.addEventListener("click", selectLogFolder);
-    els.clearLogFolderBtn.addEventListener("click", clearLogFolder);
-    els.testBridgeBtn.addEventListener("click", testBridge);
-    els.exportConfigBtn.addEventListener("click", exportSettingsSnapshot);
+    const bindClick = (el, handler) => {
+      if (!el) return;
+      el.addEventListener("click", handler);
+    };
+
+    bindClick(els.refreshDocBtn, refreshDocumentSummary);
+    bindClick(els.saveSettingsBtn, saveSettings);
+    bindClick(els.editBridgeBtn, editBridgeUrl);
+    bindClick(els.selectJobFolderBtn, selectJobFolder);
+    bindClick(els.clearJobFolderBtn, clearJobFolder);
+    bindClick(els.selectLogFolderBtn, selectLogFolder);
+    bindClick(els.clearLogFolderBtn, clearLogFolder);
+    bindClick(els.testBridgeBtn, testBridge);
+    bindClick(els.exportConfigBtn, exportSettingsSnapshot);
     bindActionWithCompletionAlert(els.createJobBtn, "Create Job Folder Skeleton", createJobFolderSkeleton);
     bindActionWithCompletionAlert(els.exportMasksBtn, "Export Masks To Job Folder", exportMasksToJobFolder);
     bindActionWithCompletionAlert(els.prepareImportBtn, "Prepare Import Structure", prepareImportStructure);
     bindActionWithCompletionAlert(els.importPlanBtn, "Build Import Plan", buildImportPlan);
     bindActionWithCompletionAlert(els.importTrapsBtn, "Import Traps", importTraps);
-    els.saveStatusBtn.addEventListener("click", saveStatusToFile);
+    bindClick(els.saveStatusBtn, saveStatusToFile);
     bindActionWithCompletionAlert(els.manualKnockoutBtn, "Manual Progressive Knockout", runManualProgressiveKnockout);
+    bindActionWithCompletionAlert(els.cutKeyBtn, "Cut Top Key From Colors", runCutTopKeyKnockout);
     bindActionWithCompletionAlert(els.runBtn, "Run Trapper", runTrapper);
   }
 
@@ -3305,6 +3589,7 @@ function createController(rootNode) {
     wireEvents();
     await refreshDocumentSummary();
     setStatus("Ready.\n\nThis panel is the UXP foundation for the trapper rewrite.");
+    resetRunProgress("Idle");
   }
 
   return { init };

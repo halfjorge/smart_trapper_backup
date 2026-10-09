@@ -168,6 +168,9 @@ def sample_png_first_visible_rgb(path):
 
         out[y * stride:(y + 1) * stride] = row
 
+    best_alpha = -1
+    hits = {}
+
     for y in range(height):
         row_start = y * stride
         for x in range(width):
@@ -182,10 +185,23 @@ def sample_png_first_visible_rgb(path):
                 g = out[i + 2]
                 b = out[i + 4]
                 a = out[i + 6] if channels == 4 else 255
-            if a > 0:
-                return {"r": int(r), "g": int(g), "b": int(b), "a": int(a)}
 
-    return None
+            if a <= 0:
+                continue
+
+            if a > best_alpha:
+                best_alpha = a
+                hits = {}
+
+            if a == best_alpha:
+                key = (int(r), int(g), int(b))
+                hits[key] = hits.get(key, 0) + 1
+
+    if best_alpha <= 0 or not hits:
+        return None
+
+    (r, g, b), _count = max(hits.items(), key=lambda item: item[1])
+    return {"r": r, "g": g, "b": b, "a": int(best_alpha)}
 
 
 def build_mask_color_map(job_folder, job_json_path):

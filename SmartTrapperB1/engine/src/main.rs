@@ -1,7 +1,7 @@
 use anyhow::{Context, Result};
 use clap::Parser;
 use std::fs::File;
-use std::io::BufWriter;
+use std::io::{BufWriter, Write};
 use png::{BitDepth, ColorType, Encoder, PixelDimensions, Unit};
 use serde::{Deserialize, Serialize};
 use std::collections::VecDeque;
@@ -84,27 +84,56 @@ fn sanitize(s:&str)->String{
     s.chars().map(|c| if "/\\:*?\"<>|".contains(c){'_' } else {c}).collect()
 }
 
-fn read_mask_rgba(path:&Path)->Result<(u32,u32,Vec<u8>)>{
-    let img=image::open(path)?.to_rgba8();
-    let (w,h)=img.dimensions();
-    Ok((w,h,img.into_raw()))
-}
+fn read_mask_bit_from_png(path:&Path,alpha_threshold:u8,nonzero_alpha:bool)->Result<(u32,u32,Vec<u8>)>{
+    let file=File::open(path)?;
+    let decoder=png::Decoder::new(file);
+    let mut reader=decoder.read_info()?;
+    let info=reader.info();
+    let w=info.width;
+    let h=info.height;
+    let bit_depth=info.bit_depth;
+    let color_type=info.color_type;
 
-fn alpha_to_bit_with_threshold(w:u32,h:u32,rgba:&[u8],alpha_threshold:u32)->Vec<u8>{
-    let mut out=vec![0u8;(w*h)as usize];
-    let threshold=alpha_threshold.min(255) as u8;
-    for i in 0..(w*h)as usize{
-        out[i]=if rgba[i*4+3]>=threshold{1}else{0};
-    }
-    out
-}
+    let channels = match color_type {
+        ColorType::Rgba => 4usize,
+        ColorType::Rgb => 3usize,
+        ColorType::GrayscaleAlpha => 2usize,
+        ColorType::Grayscale => 1usize,
+        _ => anyhow::bail!("unsupported PNG color type {:?} for {}", color_type, path.display()),
+    };
+    let bytes_per_sample = match bit_depth {
+        BitDepth::Eight => 1usize,
+        BitDepth::Sixteen => 2usize,
+        _ => anyhow::bail!("unsupported PNG bit depth {:?} for {}", bit_depth, path.display()),
+    };
+    let bytes_per_pixel = channels * bytes_per_sample;
 
-fn alpha_to_bit_nonzero(w:u32,h:u32,rgba:&[u8])->Vec<u8>{
     let mut out=vec![0u8;(w*h)as usize];
-    for i in 0..(w*h)as usize{
-        out[i]=if rgba[i*4+3]>0{1}else{0};
+    let mut row_idx=0usize;
+    while let Some(row)=reader.next_row()? {
+        let data=row.data();
+        let mut src=0usize;
+        let row_base=row_idx * (w as usize);
+        for x in 0..(w as usize){
+            let alpha = match color_type {
+                ColorType::Rgba => data[src + 3 * bytes_per_sample],
+                ColorType::Rgb => 255u8,
+                ColorType::GrayscaleAlpha => data[src + bytes_per_sample],
+                ColorType::Grayscale => 255u8,
+                _ => 0u8,
+            };
+            out[row_base + x] = if nonzero_alpha {
+                if alpha > 0 { 1 } else { 0 }
+            } else if alpha >= alpha_threshold {
+                1
+            } else {
+                0
+            };
+            src += bytes_per_pixel;
+        }
+        row_idx += 1;
     }
-    out
+    Ok((w,h,out))
 }
 
 fn dilate(mask:&[u8],w:u32,h:u32)->Vec<u8>{
@@ -380,19 +409,6 @@ fn apply_edge_bias_key_constrained(
 fn any_on(m:&[u8])->bool{ m.iter().any(|&v|v!=0) }
 
 fn write_mask_png(path:&Path,mask:&[u8],w:u32,h:u32,resolution_dpi:f64)->Result<()>{
-    let mut raw = vec![0u8; (w as usize) * (h as usize) * 4];
-    for y in 0..h{
-        for x in 0..w{
-            let idx=(y*w+x)as usize;
-            let a=if mask[idx]!=0{255}else{0};
-            let p = idx * 4;
-            raw[p] = 255;
-            raw[p + 1] = 255;
-            raw[p + 2] = 255;
-            raw[p + 3] = a;
-        }
-    }
-
     let file = File::create(path)?;
     let writer = BufWriter::new(file);
     let mut enc = Encoder::new(writer, w, h);
@@ -407,8 +423,57 @@ fn write_mask_png(path:&Path,mask:&[u8],w:u32,h:u32,resolution_dpi:f64)->Result<
         }));
     }
     let mut png_writer = enc.write_header()?;
-    png_writer.write_image_data(&raw)?;
+    let mut stream = png_writer.stream_writer()?;
+    let mut row = vec![0u8; (w as usize) * 4];
+    for y in 0..h{
+        for x in 0..w{
+            let idx=(y*w+x)as usize;
+            let a=if mask[idx]!=0{255}else{0};
+            let p = (x as usize) * 4;
+            row[p] = 255;
+            row[p + 1] = 255;
+            row[p + 2] = 255;
+            row[p + 3] = a;
+        }
+        stream.write_all(&row)?;
+    }
+    stream.finish()?;
     Ok(())
+}
+
+fn find_file_meta<'a>(job:&'a JobFile,name:&str)->Result<&'a FileMeta>{
+    job.files.iter().find(|f|f.name==name).context(format!("missing file meta for {}", name))
+}
+
+fn read_named_mask_with_threshold(job_folder:&Path, job:&JobFile, name:&str, alpha_threshold:u32)->Result<Vec<u8>>{
+    let f=find_file_meta(job,name)?;
+    let (mw,mh,mask)=read_mask_bit_from_png(&job_folder.join(&f.png), alpha_threshold.min(255) as u8, false)?;
+    if mw!=job.widthPx||mh!=job.heightPx{ anyhow::bail!("mask size mismatch for {}", name); }
+    Ok(mask)
+}
+
+fn read_named_mask_nonzero(job_folder:&Path, job:&JobFile, name:&str)->Result<Vec<u8>>{
+    let f=find_file_meta(job,name)?;
+    let (mw,mh,mask)=read_mask_bit_from_png(&job_folder.join(&f.png), 1, true)?;
+    if mw!=job.widthPx||mh!=job.heightPx{ anyhow::bail!("mask size mismatch for {}", name); }
+    Ok(mask)
+}
+
+fn read_clean_mask(clean_masks_dir:&Path, name:&str, w:u32, h:u32)->Result<Vec<u8>>{
+    let clean_path=clean_masks_dir.join(format!("CLEAN__{}.png", sanitize(name)));
+    let (mw,mh,mask)=read_mask_bit_from_png(&clean_path, 1, false)?;
+    if mw!=w||mh!=h{
+        anyhow::bail!("clean mask size mismatch for {}", name);
+    }
+    Ok(mask)
+}
+
+fn apply_key_cut_in_place(mask:&mut [u8], key_mask:&[u8]){
+    for i in 0..mask.len(){
+        if key_mask[i] != 0 {
+            mask[i] = 0;
+        }
+    }
 }
 
 fn dirs8()->[(i32,i32);8]{
@@ -464,61 +529,11 @@ fn main()->Result<()>{
     let edge_bias_px=if use_cleanup { job.edgeBiasPx } else { 0.0 };
     let key_trap_pullback_px=job.keyTrapPullbackPx;
 
-    // Load plates in stack order (bottom -> top).
-    // job.colors is exported bottom -> top, then KEY sits above all colors.
-    let mut plate_names=Vec::new();
-    let mut plates=Vec::new();
-    let mut cleaned_color_masks:Vec<(String,Vec<u8>)>=Vec::new();
+    // Load key masks once. Color masks are processed on demand to keep memory bounded.
+    let key_mask=read_named_mask_with_threshold(&job_folder,&job,&job.keyLayerName,alpha_threshold)?;
+    let key_cover_mask=read_named_mask_nonzero(&job_folder,&job,&job.keyLayerName)?;
 
-    let mut raw_color_masks:Vec<(String,Vec<u8>)>=Vec::new();
-    for c in &job.colors{
-        let f=job.files.iter().find(|f|f.name==c.name).unwrap();
-        let (mw,mh,rgba)=read_mask_rgba(&job_folder.join(&f.png))?;
-        if mw!=w||mh!=h{ anyhow::bail!("mask size mismatch"); }
-        let plate=alpha_to_bit_with_threshold(w,h,&rgba,alpha_threshold);
-        raw_color_masks.push((c.name.clone(), plate));
-    }
-
-    let key_file=job.files.iter()
-        .find(|f|f.kind=="KEY" || f.name==job.keyLayerName)
-        .context("missing KEY mask file in job.json")?;
-    let (kw,kh,key_rgba)=read_mask_rgba(&job_folder.join(&key_file.png))?;
-    if kw!=w||kh!=h{ anyhow::bail!("key mask size mismatch"); }
-    let key_mask=alpha_to_bit_with_threshold(w,h,&key_rgba,alpha_threshold);
-    let key_cover_mask=alpha_to_bit_nonzero(w,h,&key_rgba);
-    let working_color_masks=raw_color_masks.clone();
-
-    for i in 0..working_color_masks.len(){
-        let color_name=working_color_masks[i].0.clone();
-        let mut plate=working_color_masks[i].1.clone();
-        if use_cleanup && edge_bias_px!=0.0{
-            let mut others_union=vec![0u8;n];
-            for j in 0..working_color_masks.len(){
-                if i==j{ continue; }
-                let om=&working_color_masks[j].1;
-                for k in 0..n{
-                    if om[k]!=0{ others_union[k]=1; }
-                }
-            }
-            plate=apply_edge_bias_key_constrained(plate,w,h,edge_bias_px,&key_cover_mask,&others_union);
-        }
-        plate_names.push(color_name.clone());
-        cleaned_color_masks.push((color_name, plate.clone()));
-        plates.push(plate);
-    }
-
-    if job.cutTopKey {
-        for plate in plates.iter_mut() {
-            for i in 0..n {
-                if key_mask[i] != 0 {
-                    plate[i] = 0;
-                }
-            }
-        }
-    }
-
-    plate_names.push(job.keyLayerName.clone());
-    plates.push(key_mask);
+    let color_names:Vec<String>=job.colors.iter().map(|c| c.name.clone()).collect();
 
     let traps_dir=job_folder.join("traps");
     if traps_dir.exists(){ fs::remove_dir_all(&traps_dir)?; }
@@ -528,9 +543,21 @@ fn main()->Result<()>{
     if clean_masks_dir.exists(){ fs::remove_dir_all(&clean_masks_dir)?; }
     fs::create_dir_all(&clean_masks_dir)?;
 
-    for (name,mask) in &cleaned_color_masks{
-        let file_name=format!("CLEAN__{}.png",sanitize(name));
-        write_mask_png(&clean_masks_dir.join(&file_name),mask,w,h,job.resolution)?;
+    for (i, color_name) in color_names.iter().enumerate() {
+        let mut plate=read_named_mask_with_threshold(&job_folder,&job,color_name,alpha_threshold)?;
+        if use_cleanup && edge_bias_px!=0.0{
+            let mut others_union=vec![0u8;n];
+            for (j, other_name) in color_names.iter().enumerate() {
+                if i==j{ continue; }
+                let other_mask=read_named_mask_with_threshold(&job_folder,&job,other_name,alpha_threshold)?;
+                for k in 0..n{
+                    if other_mask[k]!=0{ others_union[k]=1; }
+                }
+            }
+            plate=apply_edge_bias_key_constrained(plate,w,h,edge_bias_px,&key_cover_mask,&others_union);
+        }
+        let file_name=format!("CLEAN__{}.png",sanitize(color_name));
+        write_mask_png(&clean_masks_dir.join(&file_name),&plate,w,h,job.resolution)?;
     }
 
     let mut out=TrapsOut{traps:vec![]};
@@ -540,19 +567,39 @@ fn main()->Result<()>{
     // This prevents traps from "jumping" across paper to reach a target plate.
     // For key-target traps, also pull back N px from the outside key edge to avoid
     // butt-registering source traps directly to the paper-facing key boundary.
-    for ai in 0..plates.len(){
-        let a=&plates[ai];
-        for bi in (ai+1)..plates.len(){
-            let b=&plates[bi];
-                let boundary_seed=pair_boundary_seed(a,b,w,h);
-                if !any_on(&boundary_seed){continue;}
-                let da=dilate_n(boundary_seed,w,h,trap_px as u32);
-                let target_allow=
-                    if bi==plates.len()-1{
-                    erode_n(b.clone(),w,h,key_trap_pullback_px)
-                }else{
-                    b.clone()
-                };
+    for ai in 0..color_names.len(){
+        let src=color_names[ai].clone();
+        let mut a=read_clean_mask(&clean_masks_dir, &src, w, h)?;
+        if job.cutTopKey {
+            apply_key_cut_in_place(&mut a, &key_mask);
+        }
+        for bi in (ai+1)..=color_names.len(){
+            let tgt = if bi==color_names.len() {
+                job.keyLayerName.clone()
+            } else {
+                color_names[bi].clone()
+            };
+            let mut b = if bi==color_names.len() {
+                key_mask.clone()
+            } else {
+                let mut mask=read_clean_mask(&clean_masks_dir, &tgt, w, h)?;
+                if job.cutTopKey {
+                    apply_key_cut_in_place(&mut mask, &key_mask);
+                }
+                mask
+            };
+            let boundary_seed=pair_boundary_seed(&a,&b,w,h);
+            if !any_on(&boundary_seed){continue;}
+            let da=dilate_n(boundary_seed,w,h,trap_px as u32);
+            let key_target_eroded = if bi==color_names.len() {
+                Some(erode_n(b.clone(),w,h,key_trap_pullback_px))
+            } else {
+                None
+            };
+            let target_allow:&[u8] = match &key_target_eroded {
+                Some(mask) => mask.as_slice(),
+                None => b.as_slice(),
+            };
             let mut trap_mask=vec![0u8;n];
             for i in 0..n{
                 if da[i]!=0 && target_allow[i]!=0 && a[i]==0{
@@ -561,15 +608,12 @@ fn main()->Result<()>{
             }
             if !any_on(&trap_mask){continue;}
 
-            let src=plate_names[ai].clone();
-            let tgt=plate_names[bi].clone();
-
             let file_name=format!("TRAP__{}_over_{}.png",sanitize(&src),sanitize(&tgt));
             let out_path=traps_dir.join(&file_name);
             write_mask_png(&out_path,&trap_mask,w,h,job.resolution)?;
 
             out.traps.push(TrapSpec{
-                source:src,
+                source:src.clone(),
                 target:tgt,
                 png:format!("traps/{}",file_name),
             });

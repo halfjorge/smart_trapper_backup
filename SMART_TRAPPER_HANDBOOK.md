@@ -1,6 +1,6 @@
 # Smart Trapper Handbook
 
-Last updated: 2026-03-17  
+Last updated: 2026-03-18  
 Repository root: `C:\Users\Valued Customer\Desktop\trapper`  
 Primary branch: `trapper_active`
 
@@ -38,7 +38,8 @@ Role:
 - Orchestrates export -> bridge run -> import actions.
 - Stores settings and produces status snapshots.
 - Creates a hidden original flattened snapshot layer.
-- Supports a separate manual progressive knockout action before trapping.
+- Supports separate Photoshop-side prep actions before trapping.
+- Shows a phase-based run progress bar during `Run Trapper`.
 
 ### Bridge
 - `UXP_Trapper/real_bridge.py`
@@ -90,10 +91,12 @@ Expected import structure:
 
 ### Run Trapper
 - Creates or refreshes hidden `__ORIGINAL_FLATTENED__` at the top of the stack.
+- Forces snapshot creation from the current top layer so placement does not depend on the user’s active layer selection.
 - Exports masks and metadata.
 - Calls bridge `/run`.
 - Rebinds selected run folder when bridge returns job path.
 - Verifies `mask_colors.json` presence.
+- Updates a real-time phase-based progress bar during snapshot, bridge preflight, export, bridge run, and output verification.
 
 ### Manual Progressive Knockout
 - Separate UXP action button.
@@ -102,6 +105,13 @@ Expected import structure:
   - delete that selection out of each lower visible art layer except paper
   - repeat top-down until all non-paper layers are progressively knocked out
 - Use this on files that are not already progressively knocked out before running `Run Trapper`.
+
+### Cut Top Key From Colors
+- Separate UXP action button.
+- Uses the top visible art layer as the key source.
+- Deletes that key selection out of lower visible art layers only.
+- Preserves the key layer itself and skips the paper layer.
+- Replaces the older `Cut top key layer out of visible colors` run-setting checkbox.
 
 ### Prepare Import Structure
 - Wraps eligible layers into `COLOR__` groups.
@@ -147,6 +157,10 @@ Expected import structure:
 - Added completion alerts for long-running actions.
 - Added flattened snapshot layer behavior for debugging/reference.
 - Added working manual progressive knockout action in UXP, separate from normal `Run Trapper`.
+- Replaced the old top-key knockout checkbox with a separate `Cut Top Key From Colors` action button.
+- Simplified the visible panel UI to run settings, core actions, and status.
+- Added a phase-based `Run Trapper` progress bar in the panel status area.
+- Forced `__ORIGINAL_FLATTENED__` creation from the top of the layer stack regardless of active-layer selection.
 - Iteratively fixed:
   - trap/clean placement drift
   - smart object/layer effect import artifacts
