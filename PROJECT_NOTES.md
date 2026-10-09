@@ -124,6 +124,8 @@ How each type should be handled is in `TRAP_RULES_NOTES.md`:
 - Red file-check banner for files that aren't RGB at 300 ppi. It also shows "CHECK SETTINGS" for
   risky values (Edge bias below 0, Trap width 0, pullback not smaller than Trap width), and
   "LAST RUN MADE 0 TRAPS" after a run with no traps.
+- Number boxes are text boxes, so the mouse wheel can't change them by accident. Values are checked
+  when you leave the box.
 - Trap layers renamed `_under_`.
 - **Defaults:** round traps ON, colour trap pullback 0.
 

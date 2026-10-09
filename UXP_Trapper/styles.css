@@ -147,6 +147,7 @@ html, body {
 }
 
 input[type="number"],
+input.num-input,
 select {
   display: block;
   width: 100%;
@@ -238,4 +239,16 @@ select {
 .setting-box label span {
   color: #f2f2f2;
   font-size: 13px;
+}
+
+.check-row input[type="checkbox"] {
+  vertical-align: middle;
+  margin-right: 10px;
+}
+
+.check-text {
+  vertical-align: middle;
+  color: #f2f2f2;
+  font-size: 13px;
+  cursor: pointer;
 }

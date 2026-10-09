@@ -64,27 +64,27 @@ function panelMarkup() {
         </div>
         <div class="field" title="How solid a pixel must be to count as ink (0-255). Soft edge pixels below this are treated as paper. 90 = about 35% opacity. Only used when Preflight cleanup is on.">
           <div class="field-label">Alpha threshold</div>
-          <input id="alphaThreshold" type="number" min="0" max="255" step="1">
+          <input id="alphaThreshold" type="text" inputmode="decimal" class="num-input" min="0" max="255" step="1">
           <div class="field-help">How solid a pixel must be to count as ink (0-255). Soft edge pixels below this are treated as paper. 90 = about 35% opacity. Only used when Preflight cleanup is on.</div>
         </div>
         <div class="field" title="Grows (+) or shrinks (-) every colour's edges before trapping. Growth only happens under the key, never out onto paper, so 1 closes hairline white gaps under the keyline. Only used when Preflight cleanup is on.">
           <div class="field-label">Edge bias (px)</div>
-          <input id="edgeBiasPx" type="number" step="0.5">
+          <input id="edgeBiasPx" type="text" inputmode="decimal" class="num-input" step="0.5">
           <div class="field-help">Grows (+) or shrinks (-) every colour's edges before trapping. Growth only happens under the key, never out onto paper, so 1 closes hairline white gaps under the keyline. Only used when Preflight cleanup is on.</div>
         </div>
         <div class="field" title="When a colour spreads under the key, stop this many pixels short of the key's outer edge so the trap can't peek out past the keyline onto the paper. 0 = no pullback.">
           <div class="field-label">Key trap pullback (px)</div>
-          <input id="keyTrapPullbackPx" type="number" min="0" step="1">
+          <input id="keyTrapPullbackPx" type="text" inputmode="decimal" class="num-input" min="0" step="1">
           <div class="field-help">When a colour spreads under the key, stop this many pixels short of the key's outer edge so the trap can't peek out past the keyline onto the paper. 0 = no pullback.</div>
         </div>
         <div class="field" title="A trap tucked under another colour stops this many pixels short of that colour's open edge (where it meets paper or a colour below), so a slightly off-register print can't show a sliver of trap. Stops traps from butting up to the edge (e.g. red creeping right to the edge of small gray dots). 0 = old behaviour.">
           <div class="field-label">Colour trap pullback (px)</div>
-          <input id="colorTrapPullbackPx" type="number" min="0" step="1">
+          <input id="colorTrapPullbackPx" type="text" inputmode="decimal" class="num-input" min="0" step="1">
           <div class="field-help">A trap tucked under another colour stops this many pixels short of that colour's open edge (where it meets paper or a colour below), so a slightly off-register print can't show a sliver of trap. Stops traps from butting up to the edge (e.g. red creeping right to the edge of small gray dots). 0 = old behaviour.</div>
         </div>
         <div class="field" title="How far each colour spreads under the colour above it in the layer stack. At 300 dpi, 6 px is about 0.02 in (0.5 mm).">
           <div class="field-label">Trap width (px)</div>
-          <input id="trapPx" type="number" min="0" step="1">
+          <input id="trapPx" type="text" inputmode="decimal" class="num-input" min="0" step="1">
           <div class="field-help">How far each colour spreads under the colour above it in the layer stack. At 300 dpi, 6 px is about 0.02 in (0.5 mm).</div>
         </div>
       </div>
@@ -4127,6 +4127,34 @@ function createController(rootNode) {
       if (!el) return;
       el.addEventListener("change", persistSettingsSilently);
       el.addEventListener("input", persistSettingsSilently);
+    });
+
+    // Number boxes are plain text boxes on purpose: Photoshop number boxes change
+    // their value when the mouse wheel scrolls over them, which silently changed
+    // settings while scrolling the panel (Edge bias ended up at -1). Typed values
+    // are checked when you leave the box: anything that isn't a number goes back
+    // to the last good value, and values are kept inside their min/max.
+    [["alphaThreshold", 0, 255], ["edgeBiasPx", -20, 20], ["keyTrapPullbackPx", 0, 50],
+     ["colorTrapPullbackPx", 0, 50], ["trapPx", 0, 50]].forEach(([id, lo, hi]) => {
+      const el = els[id];
+      if (!el) return;
+      let lastGood = String(el.value);
+      el.addEventListener("focus", () => { lastGood = String(el.value); });
+      el.addEventListener("change", () => {
+        const text = String(el.value).trim();
+        const n = Number(text);
+        if (text === "" || !Number.isFinite(n)) {
+          appendStatus("'" + text + "' is not a number - " + id + " set back to " + lastGood + ".");
+          el.value = lastGood;
+        } else {
+          const c = Math.min(hi, Math.max(lo, n));
+          if (c !== n) appendStatus(id + " " + n + " is outside " + lo + " to " + hi + " - set to " + c + ".");
+          el.value = String(c);
+          lastGood = el.value;
+        }
+        persistSettingsSilently();
+        try { updateFileCheckBanner(); } catch (e) {}
+      });
     });
 
     bindClick(els.refreshDocBtn, refreshDocumentSummary);
