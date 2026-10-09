@@ -55,8 +55,9 @@ and what Sara used on her last run (Oct 7).
 - Edge bias (`edgeBiasPx`): 0 by default; Sara 1. It grows colours back only where the key covers
   them. The engine treats 0-1 as 1 (minimum, since 2026-10-09), so colours always touch the key.
 - Key trap pullback (`keyTrapPullbackPx`): 1 default; Sara 1.
-- Colour trap pullback (`colorTrapPullbackPx`): 0 default. Sara used 0, but prefers the look of 2 on
-  Byrne (2026-10-09). It always keeps 1 px of overlap (rule 10).
+- Colour trap pullback (`colorTrapPullbackPx`): **keep 0 by default** (decided 2026-10-09). Use 2 only by
+  choice on dot-heavy files (e.g. Byrne's calendar dots), where a sliver of trap peeking past small
+  shapes would show. At 2 those spots keep only 1 px of overlap, against about 5 px of poster drift.
 - Round traps (`trapShape` "round"): on by default; Sara on.
 - Close key halo (`closeKeyHaloPx` 2 when ticked): off by default (rule 4).
 - Test runs should use Sara's values.

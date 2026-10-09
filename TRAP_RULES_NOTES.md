@@ -120,6 +120,8 @@ The trapper could report which type a file is when you run it.
   (1.4 px) even where the corner rule would cut it. Without it, a lower third colour that was as
   close as the trapping colour removed the overlap entirely: butt joins, e.g. 26k px in DMB's
   dithered gradient. Butt px are now 0 in all easy examples (TEST_RESULTS.md).
+- DECIDED 2026-10-09 (Sara): Colour trap pullback default stays 0. Use 2 only by choice on
+  dot-heavy files. Poster registration drift is about 5 px; the '2 px' figure was fine art only.
 - PULLBACK KEEPS 1 PX - BUILT 2026-10-09. Colour trap pullback never removes the first ring next to
   the colour either (Byrne pullback 2: 20,937 butt px -> 0). Sara prefers pullback 2 visually
   around small dots.
