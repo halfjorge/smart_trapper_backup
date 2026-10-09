@@ -116,6 +116,10 @@ The trapper could report which type a file is when you run it.
   nothing visible with all layers on; 6,871 trap px still touch an open edge (mostly 1 px specks at small
   gray dots; 27 spots over 10 px) vs 53,063 with old square traps and 0 with pullback 2. Revisit
   pullback 2 if those specks ever show on press.
+- MINIMUM OVERLAP - BUILT 2026-10-09. Round traps always keep the first ring next to the colour
+  (1.4 px) even where the corner rule would cut it. Without it, a lower third colour that was as
+  close as the trapping colour removed the overlap entirely: butt joins, e.g. 26k px in DMB's
+  dithered gradient. Butt px are now 0 in all easy examples (TEST_RESULTS.md).
 
 ## Open questions
 

@@ -48,12 +48,12 @@ function panelMarkup() {
           </div>
           <div class="field-help">Tidies each colour before trapping, using Alpha threshold and Edge bias below. When off, those two settings are ignored.</div>
         </div>
-        <div class="setting-box" title="Traps grow the same 5 px in every direction (round) instead of in a square, and a trap under another colour stops where it gets closer to open paper than to its own colour, so it never wraps around the end of a shape. Turn off to get the old square traps. Under the key nothing changes.">
+        <div class="setting-box" title="Traps grow the same 5 px in every direction (round) instead of in a square, and a trap under another colour stops where it gets closer to open paper than to its own colour, so it never wraps around the end of a shape (it always keeps at least 1 px of overlap, so two colours never butt). Turn off to get the old square traps. Under the key nothing changes.">
           <div class="check-row">
             <input id="roundTraps" type="checkbox">
             <span class="check-text" data-for="roundTraps" style="color:#f2f2f2; opacity:1;">Round traps (follow own colour)</span>
           </div>
-          <div class="field-help">Traps grow the same 5 px in every direction (round) instead of in a square, and a trap under another colour stops where it gets closer to open paper than to its own colour, so it never wraps around the end of a shape. Turn off to get the old square traps. Under the key nothing changes.</div>
+          <div class="field-help">Traps grow the same 5 px in every direction (round) instead of in a square, and a trap under another colour stops where it gets closer to open paper than to its own colour, so it never wraps around the end of a shape (it always keeps at least 1 px of overlap, so two colours never butt). Turn off to get the old square traps. Under the key nothing changes.</div>
         </div>
         <div class="setting-box" title="Fills thin paper gaps (up to 2 px) between a colour and the key with that colour, then traps it under the key as usual. For files where the line work does not quite touch the colours, so a thin paper outline shows around the key (e.g. Phish). Leave off when the artist meant those thin paper lines. Open paper is never filled.">
           <div class="check-row">

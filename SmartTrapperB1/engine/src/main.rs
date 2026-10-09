@@ -678,10 +678,14 @@ fn main()->Result<()>{
                 grown.iter().map(|v| (*v==0) as u8).collect()
             } else { vec![1u8;n] };
             if round {
-                // Keep only pixels at least as close to this colour as to open area.
+                // Keep only pixels at least as close to this colour as to open area,
+                // except the first ring next to the colour (distance <= 1.42 px): that
+                // ring is always kept so two colours never butt (rule 10). Without it,
+                // fine detail / dithered areas lost their overlap wherever a third
+                // colour was as close as the trapping colour.
                 let d_own=fast::capped_dist_sq(&a,w as usize,h as usize,trap_px);
                 let d_open=fast::capped_dist_sq(&showing,w as usize,h as usize,trap_px);
-                for k in 0..n { if d_own[k] > d_open[k] { safe[k]=0; } }
+                for k in 0..n { if d_own[k] > d_open[k] && d_own[k] > 2 { safe[k]=0; } }
             }
         }
         for bi in (ai+1)..=color_names.len(){
