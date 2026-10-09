@@ -120,6 +120,13 @@ The trapper could report which type a file is when you run it.
   (1.4 px) even where the corner rule would cut it. Without it, a lower third colour that was as
   close as the trapping colour removed the overlap entirely: butt joins, e.g. 26k px in DMB's
   dithered gradient. Butt px are now 0 in all easy examples (TEST_RESULTS.md).
+- PULLBACK KEEPS 1 PX - BUILT 2026-10-09. Colour trap pullback never removes the first ring next to
+  the colour either (Byrne pullback 2: 20,937 butt px -> 0). Sara prefers pullback 2 visually
+  around small dots.
+- KEY EDGE MINIMUM - BUILT 2026-10-09. Edge bias 0-1 is treated as 1. Client colours usually stop
+  1 px short of the key's soft edge, and without 1 px of growth nothing traps under the key lines.
+  Byrne at Edge bias 0: colour under 40% of the key area, vs 67% now; Sara's previous after file
+  has 68%.
 
 ## Open questions
 

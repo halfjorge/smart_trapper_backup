@@ -67,20 +67,20 @@ function panelMarkup() {
           <input id="alphaThreshold" type="text" inputmode="decimal" class="num-input" min="0" max="255" step="1">
           <div class="field-help">How solid a pixel must be to count as ink (0-255). Soft edge pixels below this are treated as paper. 90 = about 35% opacity. Only used when Preflight cleanup is on.</div>
         </div>
-        <div class="field" title="Grows (+) or shrinks (-) every colour's edges before trapping. Growth only happens under the key, never out onto paper, so 1 closes hairline white gaps under the keyline. Only used when Preflight cleanup is on.">
+        <div class="field" title="Grows (+) or shrinks (-) every colour's edges before trapping. Growth only happens under the key, never out onto paper, so 1 closes hairline white gaps under the keyline. Values from 0 to 1 are treated as 1 (the minimum that keeps colours touching the key, so they trap under it). Only used when Preflight cleanup is on.">
           <div class="field-label">Edge bias (px)</div>
           <input id="edgeBiasPx" type="text" inputmode="decimal" class="num-input" step="0.5">
-          <div class="field-help">Grows (+) or shrinks (-) every colour's edges before trapping. Growth only happens under the key, never out onto paper, so 1 closes hairline white gaps under the keyline. Only used when Preflight cleanup is on.</div>
+          <div class="field-help">Grows (+) or shrinks (-) every colour's edges before trapping. Growth only happens under the key, never out onto paper, so 1 closes hairline white gaps under the keyline. Values from 0 to 1 are treated as 1 (the minimum that keeps colours touching the key, so they trap under it). Only used when Preflight cleanup is on.</div>
         </div>
         <div class="field" title="When a colour spreads under the key, stop this many pixels short of the key's outer edge so the trap can't peek out past the keyline onto the paper. 0 = no pullback.">
           <div class="field-label">Key trap pullback (px)</div>
           <input id="keyTrapPullbackPx" type="text" inputmode="decimal" class="num-input" min="0" step="1">
           <div class="field-help">When a colour spreads under the key, stop this many pixels short of the key's outer edge so the trap can't peek out past the keyline onto the paper. 0 = no pullback.</div>
         </div>
-        <div class="field" title="A trap tucked under another colour stops this many pixels short of that colour's open edge (where it meets paper or a colour below), so a slightly off-register print can't show a sliver of trap. Stops traps from butting up to the edge (e.g. red creeping right to the edge of small gray dots). 0 = old behaviour.">
+        <div class="field" title="A trap tucked under another colour stops this many pixels short of that colour's open edge (where it meets paper or a colour below), so a slightly off-register print can't show a sliver of trap. Stops traps from butting up to the edge (e.g. red creeping right to the edge of small gray dots). The last 1 px of overlap is always kept, so colours never butt. 0 = no pullback.">
           <div class="field-label">Colour trap pullback (px)</div>
           <input id="colorTrapPullbackPx" type="text" inputmode="decimal" class="num-input" min="0" step="1">
-          <div class="field-help">A trap tucked under another colour stops this many pixels short of that colour's open edge (where it meets paper or a colour below), so a slightly off-register print can't show a sliver of trap. Stops traps from butting up to the edge (e.g. red creeping right to the edge of small gray dots). 0 = old behaviour.</div>
+          <div class="field-help">A trap tucked under another colour stops this many pixels short of that colour's open edge (where it meets paper or a colour below), so a slightly off-register print can't show a sliver of trap. Stops traps from butting up to the edge (e.g. red creeping right to the edge of small gray dots). The last 1 px of overlap is always kept, so colours never butt. 0 = no pullback.</div>
         </div>
         <div class="field" title="How far each colour spreads under the colour above it in the layer stack. At 300 dpi, 6 px is about 0.02 in (0.5 mm).">
           <div class="field-label">Trap width (px)</div>

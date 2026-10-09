@@ -26,6 +26,27 @@ all traps.
   included.
 - **Hand:** Sara's hand-trapped after file, measured the same way.
 
+## 2026-10-09 - Byrne: colour under the key, and pullback
+
+Measured on Sara's own Byrne run masks (job folder before.tif__UXP__2026-10-09T13-41-38-280Z).
+
+**Colour under key** is the share of the key (DARK BLUE) area that has a colour underneath it. With
+the key hidden, the rest shows as paper.
+
+| Engine / settings | Colour under key | Butt px |
+|---|---|---|
+| Sara's previous after file (Oct 7, square traps) | 67.6% | - |
+| Edge bias 0, trap 6, pullback 2 (Sara's runs today, old engine) | 40.0% | 20,937 |
+| Edge bias 1, trap 5, pullback 0, round | 63.8% | 0 |
+| Edge bias 1, trap 5, pullback 0, square | 67.6% | - |
+| New engine, Edge bias 0, trap 6, pullback 2 | 66.9% | 0 |
+
+**Fixes:**
+- Edge bias minimum of 1.
+- Pullback keeps 1 px of overlap.
+
+The small remaining difference from the reference comes from round versus square traps at corners.
+
 ## 2026-10-09 - easy files re-check (engine with Close key halo + 1 px minimum overlap)
 
 | File | Run | paper→ink | ink→paper | colour swap | butt px | trap at open edge | trap width p50/p90 |

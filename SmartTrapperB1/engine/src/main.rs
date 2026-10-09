@@ -532,7 +532,19 @@ fn main()->Result<()>{
     } else {
         1
     }.min(255) as u8;
-    let edge_bias_px=if use_cleanup { job.edgeBiasPx } else { 0.0 };
+    // Edge bias only grows colours inside the key's own (soft-edge) coverage. At
+    // least 1 px of that is always applied when cleanup is on: client files are
+    // usually knocked out a pixel short of the key's soft edge, and without the 1 px
+    // the colours never touch the key, so nothing traps under the key lines
+    // (Byrne at Edge bias 0: 40% of the key area had colour under it vs 64% at 1).
+    // A negative value (deliberate choke) is left as it is.
+    let edge_bias_px=if use_cleanup {
+        let eb=job.edgeBiasPx;
+        if eb>=0.0 && eb<1.0 {
+            println!("[{:>6.1}s] edge bias {} raised to 1 (minimum, keeps colours touching the key)", t0.elapsed().as_secs_f32(), eb);
+            1.0
+        } else { eb }
+    } else { 0.0 };
     let key_trap_pullback_px=job.keyTrapPullbackPx;
 
     // Key: decode once, derive both masks the old engine read separately.

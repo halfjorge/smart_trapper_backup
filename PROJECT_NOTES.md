@@ -53,9 +53,10 @@ and what Sara used on her last run (Oct 7).
   edge bias below.
 - Alpha threshold (`alphaThreshold`): 8 by default; Sara 89-90, about 35% opacity counts as ink.
 - Edge bias (`edgeBiasPx`): 0 by default; Sara 1. It grows colours back only where the key covers
-  them.
+  them. The engine treats 0-1 as 1 (minimum, since 2026-10-09), so colours always touch the key.
 - Key trap pullback (`keyTrapPullbackPx`): 1 default; Sara 1.
-- Colour trap pullback (`colorTrapPullbackPx`): 0 default; Sara 0 (rule 10).
+- Colour trap pullback (`colorTrapPullbackPx`): 0 default. Sara used 0, but prefers the look of 2 on
+  Byrne (2026-10-09). It always keeps 1 px of overlap (rule 10).
 - Round traps (`trapShape` "round"): on by default; Sara on.
 - Close key halo (`closeKeyHaloPx` 2 when ticked): off by default (rule 4).
 - Test runs should use Sara's values.
