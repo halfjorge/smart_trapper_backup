@@ -69,6 +69,12 @@ Helton:
    - Run `tools/example_checks/extract.py`.
 2. Make a blend-aware easy_check (or `--blend` mode) and measure today's trapper vs Sara's hand file
    on both. This confirms the about 3% Mempho problem before changing anything.
+   DONE 2026-10-09: `tools/example_checks/medium_check.py`. The baseline is in TEST_RESULTS.md.
+   - MPK + engine changes the solid areas: Mempho 2.18%, Helton 3.45% (hand files 0.09% / 0.05%).
+   - All of that comes from MPK cutting colours out from under the overlays.
+   - Code check: `detectBlendLikeLayers` is only used for the panel's summary text.
+   - Prepare Import makes CLEAN__ with no blend mode, so overlays likely come back Normal. Still to
+     confirm in Photoshop.
 3. Engine rule-3 changes (item 3). Keep older job.json files working, then cargo test.
 4. Panel: MPK skips overlays as cutters (item 1), fix item 2, confirm item 4 with Sara.
 5. Re-measure, add a dated section to TEST_RESULTS.md, update CHANGES / TRAP_RULES / this file,

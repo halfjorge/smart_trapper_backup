@@ -26,6 +26,52 @@ all traps.
   included.
 - **Hand:** Sara's hand-trapped after file, measured the same way.
 
+## 2026-10-09 - MEDIUM files baseline (Mempho, Helton): today's trapper, before any rule-3 change
+
+Measured with the new `tools/example_checks/medium_check.py`. It compares blend-aware composites
+(Multiply = below × colour / 255, Darken = min, opacity respected), each layer drawn in its single ink
+colour. Visible change means any channel differs by more than 12 levels. It's split into the
+**soft-edge zone** (within 2 px of soft client pixels, where rounding up to solid is a deliberate fix)
+and **solid areas** (real changes). Sara's settings, engine as of commit e53875f (5/5 cargo tests pass).
+
+"Blend kept/lost" covers Prepare Import. By the code, `CLEAN__` and `TRAP__` layers are made with no
+blend mode inside a pass-through group, so an overlay would come back Normal ("lost"). That still
+needs confirming in Photoshop's layer panel. Lost figures use white paper: the cream paper layer
+alone makes Darken differ from Normal on open paper (Helton 12.1% vs 3.6%).
+
+| File | Run | Visible change, solid areas | Total incl. soft edges | Colour kept under overlay (rule 3) | Overlay under key p50/p90/p99 px |
+|---|---|---|---|---|---|
+| Mempho | hand | **0.09%** | 1.0% | 2985 under match 99.6%, under 115 u 100% | 2.8 / 5.0 / 5.7 (match) |
+| | MPK + engine, blend kept | **2.18%** | 4.0% | 68.2%, **2.2%** | 3.0 / 6.1 / 7.1 |
+| | MPK + engine, blend lost | 2.45% | 5.0% | same | same |
+| | engine only (no MPK), blend kept | 0.12% | 1.3% | 100%, 100% | 6.0 / 19 / 51 (not cut) |
+| | engine only, blend lost | 2.45% | 5.0% | 100%, 100% | same |
+| Helton | hand | **0.05%** | 5.7% | 142 under 2985 100% | 3.0 / 5.0 / 5.4 |
+| | MPK + engine, blend kept | **3.45%** | 8.8% | **12.2%** | 3.6 / 6.4 / 7.2 |
+| | MPK + engine, blend lost | 3.60% | 9.5% | same | same |
+| | engine only, blend kept | 0.04% | 2.8% | 100% | 7.1 / 19 / 53 (not cut) |
+| | engine only, blend lost | 3.60% | 8.8% | 100% | same |
+
+(Helton's soft-edge totals are large because the key has 3.5 M soft pixels; the hand file also
+rounds those up.)
+
+**Findings**
+- **MPK breaks rule 3.** It cuts colours out from under the overlays:
+  - Mempho: 2985 U loses 440k px under match and 115 u (2.2% of the print).
+  - Helton: 142 U loses 1.42 M px under 2985 U Darken (3.5% of the print).
+  - This confirms the "about 3%". All of the solid-area change comes from that one cause.
+- **The engine traps under overlays.** It makes `TRAP__x_under_<overlay>` layers: Mempho 2985 under
+  match / 115 u, match under 115 u; Helton 142 under 2985.
+  - Under a Multiply/Darken layer those traps show as a darker 5 px rim. Without MPK that's
+    Mempho 0.12% (mostly match under 115 u, 23k px) and Helton 0.04% (16k px).
+- **Without MPK, overlays are not cut under the key at all** (p90 19 px, p99 about 52 px). The 5 px
+  overlay trap under the key currently only happens through MPK. MPK gives about 6 px (p90),
+  close to the hand file's 5.
+- **If Prepare Import does drop the blend mode,** that alone changes about 2.5% (Mempho) or
+  3.6% (Helton) of the print, whatever the engine does.
+- The hand files match rule 3: colours kept 100% under the overlays, and overlays cut under the
+  key at about 5 px.
+
 ## 2026-10-09 - Byrne: colour under the key, and pullback
 
 Measured on Sara's own Byrne run masks (job folder before.tif__UXP__2026-10-09T13-41-38-280Z).
