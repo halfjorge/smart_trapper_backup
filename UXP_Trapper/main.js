@@ -21,6 +21,7 @@ const DEFAULTS = {
   colorTrapPullbackPx: 0,
   roundTraps: true,
   closeKeyHalo: false,
+  overlayLayers: false,
   trapPx: 5,
   bridgeUrl: "http://127.0.0.1:8765",
   jobFolder: DEFAULT_JOB_FOLDER,
@@ -61,6 +62,13 @@ function panelMarkup() {
             <span class="check-text" data-for="closeKeyHalo" style="color:#f2f2f2; opacity:1;">Close key halo</span>
           </div>
           <div class="field-help">Fills thin paper gaps (up to 2 px) between a colour and the key with that colour, then traps it under the key as usual. For files where the line work does not quite touch the colours, so a thin paper outline shows around the key (e.g. Phish). Leave off when the artist meant those thin paper lines. Open paper is never filled.</div>
+        </div>
+        <div class="setting-box" title="Tick for files with transparent / overlay layers: Multiply, Darken or any other non-Normal blend mode, or opacity / fill under 100%. Colours under an overlay are kept (the overprint is part of the art) and get no trap under it. Overlays are still cut back under the key and under solid layers above them, with the normal trap. Prepare Import keeps the overlay's blend mode. Leave off for files with only solid Normal layers: nothing changes for them.">
+          <div class="check-row">
+            <input id="overlayLayers" type="checkbox">
+            <span class="check-text" data-for="overlayLayers" style="color:#f2f2f2; opacity:1;">File has transparent / overlay layers</span>
+          </div>
+          <div class="field-help">Tick for files with transparent / overlay layers: Multiply, Darken or any other non-Normal blend mode, or opacity / fill under 100%. Colours under an overlay are kept (the overprint is part of the art) and get no trap under it. Overlays are still cut back under the key and under solid layers above them, with the normal trap. Prepare Import keeps the overlay's blend mode. Leave off for files with only solid Normal layers: nothing changes for them.</div>
         </div>
         <div class="field" title="How solid a pixel must be to count as ink (0-255). Soft edge pixels below this are treated as paper. 90 = about 35% opacity. Only used when Preflight cleanup is on.">
           <div class="field-label">Alpha threshold</div>
@@ -158,6 +166,7 @@ function createController(rootNode) {
       "preflightCleanup",
       "roundTraps",
       "closeKeyHalo",
+      "overlayLayers",
       "alphaThreshold",
       "edgeBiasPx",
       "keyTrapPullbackPx",
@@ -280,6 +289,7 @@ function createController(rootNode) {
       preflightCleanup: !!els.preflightCleanup.checked,
       roundTraps: !!els.roundTraps.checked,
       closeKeyHalo: !!els.closeKeyHalo.checked,
+      overlayLayers: !!els.overlayLayers.checked,
       alphaThreshold: numberOr(els.alphaThreshold.value, DEFAULTS.alphaThreshold),
       edgeBiasPx: numberOr(els.edgeBiasPx.value, DEFAULTS.edgeBiasPx),
       keyTrapPullbackPx: numberOr(els.keyTrapPullbackPx.value, DEFAULTS.keyTrapPullbackPx),
@@ -297,6 +307,7 @@ function createController(rootNode) {
     els.preflightCleanup.checked = !!s.preflightCleanup;
     els.roundTraps.checked = !!s.roundTraps;
     els.closeKeyHalo.checked = !!s.closeKeyHalo;
+    els.overlayLayers.checked = !!s.overlayLayers;
     els.alphaThreshold.value = String(s.alphaThreshold);
     els.edgeBiasPx.value = String(s.edgeBiasPx);
     els.keyTrapPullbackPx.value = String(s.keyTrapPullbackPx);
@@ -567,6 +578,7 @@ function createController(rootNode) {
         preflightCleanup: !!getSettings().preflightCleanup,
         trapShape: getSettings().roundTraps ? "round" : "square",
         closeKeyHaloPx: getSettings().closeKeyHalo ? 2 : 0,
+        overlayMode: !!getSettings().overlayLayers,
         alphaThreshold: numberOr(getSettings().alphaThreshold, DEFAULTS.alphaThreshold),
         edgeBiasPx: numberOr(getSettings().edgeBiasPx, DEFAULTS.edgeBiasPx),
         keyTrapPullbackPx: numberOr(getSettings().keyTrapPullbackPx, DEFAULTS.keyTrapPullbackPx),
@@ -1344,14 +1356,24 @@ function createController(rootNode) {
 
     const paper = knockable[knockable.length - 1];
     let operations = 0;
+    // Overlay mode (rule 3): overlay layers do not cut what is under them (the
+    // overprint is part of the art). They are still cut by the key and by any
+    // solid layer above them. Box off = every layer cuts, exactly as before.
+    const overlayMode = !!getSettings().overlayLayers;
     appendStatus("progressive knockout: Photoshop-side knockout start");
     appendStatus("  paper preserved: " + paper.meta.name);
+    if (overlayMode) appendStatus("  overlay mode ON: overlay layers are not used to cut");
 
     try {
         for (let sourceIdx = 0; sourceIdx < knockable.length - 1; sourceIdx += 1) {
           const source = knockable[sourceIdx];
           const sourceId = Number(layerIdOf(source && source.layer) || 0);
           if (!sourceId) continue;
+          if (overlayMode && sourceIdx > 0 && isOverlayMeta(source.meta)) {
+            appendStatus("  not cutting with overlay: " + source.meta.name + " (" + source.meta.blendMode +
+              ", opacity " + source.meta.opacity + "%, fill " + source.meta.fillOpacity + "%)");
+            continue;
+          }
 
           for (let destIdx = sourceIdx + 1; destIdx < knockable.length - 1; destIdx += 1) {
             const dest = knockable[destIdx];
@@ -1513,6 +1535,34 @@ function createController(rootNode) {
   function isNormalBlendMeta(meta) {
     const mode = String(meta && meta.blendMode || "").toLowerCase();
     return mode === "normal" || mode === "blendmode.normal";
+  }
+
+  // Rule 3: an overlay layer is any non-Normal blend mode (Multiply, Darken, ...),
+  // or opacity / fill under 100%. Same test the engine uses. A blend mode that
+  // could not be read is NOT treated as an overlay. Only used when the
+  // "File has transparent / overlay layers" box is ticked (and for its banner hint).
+  function isOverlayMeta(meta) {
+    if (!meta) return false;
+    const mode = String(meta.blendMode || "").toLowerCase();
+    const known = mode && mode !== "(unknown)";
+    const op = Number(meta.opacity);
+    const fill = Number(meta.fillOpacity);
+    return (known && !isNormalBlendMeta(meta)) || op < 100 || fill < 100;
+  }
+
+  // Visible top-level art layers that are overlays (key and paper included in the check).
+  function overlayLayerNames(doc) {
+    const names = [];
+    if (!doc) return names;
+    let entries = [];
+    try { entries = getTopLevelEntriesExcludingSnapshot(doc).entries || []; } catch (e) { entries = []; }
+    for (const entry of entries) {
+      if (!entry || !entry.meta || !entry.meta.visible) continue;
+      if (entry.meta.kind === "group") continue;
+      if (String(entry.meta.name || "").indexOf("COLOR__") === 0) continue;
+      if (isOverlayMeta(entry.meta)) names.push(entry.meta.name + " (" + entry.meta.blendMode + ")");
+    }
+    return names;
   }
 
   function isPixelKindMeta(meta) {
@@ -1863,6 +1913,51 @@ function createController(rootNode) {
       }
     }
     return { checkedGroups, hidden, failed, details };
+  }
+
+  // Overlay mode (rule 3), Prepare Import: CLEAN__ and TRAP__ layers are made as
+  // plain Normal layers, so an overlay colour would print as solid ink. Instead
+  // of changing each layer, its COLOR__ group takes the original layer's blend
+  // mode and opacity (opacity x fill, as groups have no fill). Everything inside
+  // the group (CLEAN, traps imported later) then prints like the client layer.
+  // Groups of Normal 100% layers are left untouched (pass-through).
+  async function applyOverlayModesToColorGroups(lines) {
+    let doc = null;
+    try { doc = app.activeDocument; } catch (e) { doc = null; }
+    if (!doc) return;
+    lines.push("");
+    lines.push("Overlay groups (File has transparent / overlay layers is ON):");
+    let changed = 0;
+    const top = flattenTopLevelLayers(doc);
+    for (const group of top) {
+      if (!group || !isGroupLikeLayer(group)) continue;
+      const gname = String(group.name || "");
+      if (gname.indexOf("COLOR__") !== 0) continue;
+      const sourceName = gname.substring(7);
+      const orig = findArtLayerByNameInfo(group, sourceName);
+      if (!orig || orig.__descriptor) {
+        lines.push("  " + gname + ": original layer not found, left as is");
+        continue;
+      }
+      const meta = topLevelLayerMeta(orig, -1);
+      if (!isOverlayMeta(meta)) continue;
+      const op = Math.max(0, Math.min(100, isNaN(Number(meta.opacity)) ? 100 : Number(meta.opacity)));
+      const fill = Math.max(0, Math.min(100, isNaN(Number(meta.fillOpacity)) ? 100 : Number(meta.fillOpacity)));
+      const groupOpacity = Math.round(op * fill / 100);
+      try {
+        await core.executeAsModal(async () => {
+          group.blendMode = orig.blendMode;
+          group.opacity = groupOpacity;
+        }, { commandName: "Overlay Group Blend Mode" });
+        changed += 1;
+        let after = "";
+        try { after = String(group.blendMode) + ", " + Number(group.opacity) + "%"; } catch (e) {}
+        lines.push("  " + gname + ": set to " + meta.blendMode + ", opacity " + groupOpacity + "% (now " + after + ")");
+      } catch (e) {
+        lines.push("  " + gname + ": could not set blend mode: " + String(e));
+      }
+    }
+    lines.push("  overlay groups set: " + changed);
   }
 
   async function buildCleanLayerInGroup(group, sourceName, maskColors) {
@@ -2829,6 +2924,16 @@ function createController(rootNode) {
     const parts = [];
     if (problems.length) parts.push("CHECK THIS FILE (" + (doc && doc.title ? doc.title : "document") + ")\n" + problems.join("\n"));
     if (settingIssues.length) parts.push("CHECK SETTINGS\n" + settingIssues.join("\n"));
+    try {
+      const s = getSettings();
+      if (doc && !s.overlayLayers) {
+        const ov = overlayLayerNames(doc);
+        if (ov.length) {
+          parts.push("THIS FILE HAS OVERLAY LAYERS\n  " + ov.join("\n  ") +
+            "\n  Tick 'File has transparent / overlay layers' before Manual Progressive Knockout,\n  Run Trapper and Prepare Import, or the overprints will change.");
+        }
+      }
+    } catch (e) {}
     if (lastRunZeroTraps) parts.push(lastRunZeroTraps);
     const text = parts.join("\n\n");
     if (text === lastFileCheckText) return;
@@ -3439,6 +3544,7 @@ function createController(rootNode) {
         "Settings: preflightCleanup=" + (!!settings.preflightCleanup) +
         ", roundTraps=" + (!!settings.roundTraps) +
         ", closeKeyHalo=" + (!!settings.closeKeyHalo) +
+        ", overlayLayers=" + (!!settings.overlayLayers) +
         ", alphaThreshold=" + settings.alphaThreshold +
         ", edgeBiasPx=" + settings.edgeBiasPx +
         ", keyTrapPullbackPx=" + settings.keyTrapPullbackPx +
@@ -3582,6 +3688,14 @@ function createController(rootNode) {
       lines.push("  CLEAN skipped: " + cleanSkipped);
       cleanPlacementOffset = null;
       lines.push("  CLEAN global placement offset for trap import: disabled (in-document CLEAN build)");
+    }
+
+    if (settings.overlayLayers) {
+      try {
+        await applyOverlayModesToColorGroups(lines);
+      } catch (e) {
+        lines.push("Overlay groups: error " + String(e));
+      }
     }
 
     const descriptorDump = await getLayerDescriptorDump();
@@ -4122,12 +4236,15 @@ function createController(rootNode) {
       });
     }
 
-    ["fullDebug", "preflightCleanup", "roundTraps", "closeKeyHalo", "alphaThreshold", "edgeBiasPx", "keyTrapPullbackPx", "colorTrapPullbackPx", "trapPx"].forEach((id) => {
+    ["fullDebug", "preflightCleanup", "roundTraps", "closeKeyHalo", "overlayLayers", "alphaThreshold", "edgeBiasPx", "keyTrapPullbackPx", "colorTrapPullbackPx", "trapPx"].forEach((id) => {
       const el = els[id];
       if (!el) return;
       el.addEventListener("change", persistSettingsSilently);
       el.addEventListener("input", persistSettingsSilently);
     });
+    if (els.overlayLayers) {
+      els.overlayLayers.addEventListener("change", () => { try { updateFileCheckBanner(); } catch (e) {} });
+    }
 
     // Number boxes are plain text boxes on purpose: Photoshop number boxes change
     // their value when the mouse wheel scrolls over them, which silently changed

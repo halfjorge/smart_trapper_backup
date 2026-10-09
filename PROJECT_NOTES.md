@@ -18,6 +18,16 @@ out of date.
 
 **Status**
 - EASY files (all solid Normal layers) are signed off; see section 5 and TEST_RESULTS.md.
+- MEDIUM 2026-10-09:
+  - Rule 3 is BUILT behind the panel tick box "File has transparent / overlay layers" (setting
+    `overlayLayers`, job.json `overlayMode`, default off). Sara wants overlay rules kept separate
+    from solid-file behaviour.
+  - Simulated results: Mempho and Helton have 0 solid-area change. Easy files are identical with
+    the box on or off.
+  - **Waiting for Sara** to run Mempho and Helton in Photoshop (BUILD_AND_TEST_ENGINE.bat, Reload,
+    tick the box) and to check that the COLOR__ group shows Multiply / Darken after Prepare Import.
+  - The group blend mode is set through the UXP DOM (`group.blendMode = orig.blendMode`), which
+    is untested in Photoshop. The status log says what it set.
 - The next job is **MEDIUM files**: solid Normal layers plus overlay layers (Multiply / Darken, or
   under 100% opacity/fill). The test files are **Mempho** and **Helton** in
   `Desktop\Trap Examples` (before.psd = client file, after.psd = Sara's hand trapping, notes.txt).
@@ -193,6 +203,9 @@ and what Sara used on her last run (Oct 7).
   shapes would show. At 2 those spots keep only 1 px of overlap, against about 5 px of poster drift.
 - Round traps (`trapShape` "round"): on by default; Sara on.
 - Close key halo (`closeKeyHaloPx` 2 when ticked): off by default (rule 4).
+- File has transparent / overlay layers (`overlayMode`): off by default (rule 3, added 2026-10-09).
+  Tick it only for files with Multiply/Darken or under-100% layers. When off, everything works as
+  before. The red banner names any overlay layers it finds while the box is off.
 - Test runs should use Sara's values.
 - Missing fields in older job.json files fall back to the old behaviour.
 

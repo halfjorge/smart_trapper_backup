@@ -35,6 +35,17 @@ The trapper could report which type a file is when you run it.
    (Mempho; today's trapper would visibly change ~3% of that print.)
    DARKEN counts as an overlay too (Helton). Treat any non-Normal blend mode or <100% opacity as an
    overlay - confirm with Sara if a new blend mode shows up.
+   BUILT 2026-10-09 behind the tick box 'File has transparent / overlay layers' (default off; Sara:
+   overlay rules must not touch solid-file behaviour). With the box on:
+   - MPK: overlays don't cut.
+   - Engine (`overlayMode`): no traps under overlays, and overlays don't count as cover for the
+     round/pullback rules.
+   - Prepare Import: the overlay's COLOR__ group takes its blend mode and opacity.
+   Results:
+   - Mempho / Helton: solid-area change 2.2% / 3.5% → 0, colours under overlays kept 100%.
+   - Easy files: identical with the box on or off.
+   Not yet done: the trapper reporting the file type by itself. For now the banner warns when
+   overlays are found and the box is off.
 4. Halo of missing pixels around a poor-quality key (artist error) should be closed, then the colour
    trapped under the key (Phish: 1-2 px paper halo). Judgment call -> detect it, report it, and make
    the fix an optional setting rather than automatic.

@@ -68,6 +68,17 @@ struct JobFile {
     #[serde(default)]
     closeKeyHaloPx: u32,
 
+    // "File has transparent / overlay layers" (rule 3). Off / missing = the
+    // original behaviour, unchanged. On: a colour whose blend mode is not
+    // Normal, or whose opacity / fill is under 100%, is an OVERLAY:
+    //   - no traps are made UNDER an overlay (what's below shows through it,
+    //     so a trap there would print as a visible rim);
+    //   - an overlay above does not count as covering what's below when the
+    //     round-trap / pullback rules decide where a trap would show.
+    // Overlays still trap under the key and under opaque colours above them.
+    #[serde(default)]
+    overlayMode: bool,
+
     keyLayerName: String,
     paperLayerName: String,
 
@@ -453,6 +464,15 @@ fn write_mask_png(path:&Path,mask:&[u8],w:u32,h:u32,resolution_dpi:f64)->Result<
     write_mask_png_window(path,w,h,fast::Rect::full(w,h),mask,resolution_dpi)
 }
 
+/// Rule 3: a colour is an overlay when its blend mode is not Normal, or its
+/// opacity / fill is under 100%. Same test as the panel's Clean Colors skip.
+/// An unknown blend mode is treated as Normal (never guessed as an overlay).
+fn is_overlay_color(c:&ColorMeta)->bool{
+    let m=c.blendMode.trim().to_ascii_lowercase();
+    let normal = m.is_empty() || m=="normal" || m=="blendmode.normal" || m=="(unknown)";
+    !normal || c.opacity < 99.5 || c.fillOpacity < 99.5
+}
+
 fn find_file_meta<'a>(job:&'a JobFile,name:&str)->Result<&'a FileMeta>{
     job.files.iter().find(|f|f.name==name).context(format!("missing file meta for {}", name))
 }
@@ -558,6 +578,14 @@ fn main()->Result<()>{
     println!("[{:>6.1}s] key loaded", t0.elapsed().as_secs_f32());
 
     let color_names:Vec<String>=job.colors.iter().map(|c| c.name.clone()).collect();
+    // Overlay colours (rule 3). Only used when overlayMode is on; all false otherwise.
+    let overlay:Vec<bool>=job.colors.iter().map(|c| job.overlayMode && is_overlay_color(c)).collect();
+    if job.overlayMode {
+        let names:Vec<String>=job.colors.iter().filter(|c| is_overlay_color(c))
+            .map(|c| format!("{} ({}, {}%, fill {}%)", c.name, c.blendMode, c.opacity, c.fillOpacity)).collect();
+        println!("[{:>6.1}s] overlay mode ON: {} overlay colour(s): {}", t0.elapsed().as_secs_f32(),
+            names.len(), if names.is_empty() {"none".to_string()} else {names.join(", ")});
+    }
 
     // Colours: decode each PNG exactly once; keep compact copies in memory.
     let mut plates:Vec<fast::Bits>=Vec::new();
@@ -680,6 +708,7 @@ fn main()->Result<()>{
         if color_pull>0 || round {
             let mut hidden:Vec<u8>=a.iter().zip(key_mask.iter()).map(|(x,k)| (*x!=0 || *k!=0) as u8).collect();
             for cj in (ai+1)..color_names.len(){
+                if overlay[cj] { continue; }   // rule 3: an overlay doesn't hide what's under it
                 cleans[cj].unpack_into(&mut c);
                 for k in 0..n { hidden[k]|=c[k]; }
             }
@@ -709,6 +738,7 @@ fn main()->Result<()>{
         }
         for bi in (ai+1)..=color_names.len(){
             let is_key = bi==color_names.len();
+            if !is_key && overlay[bi] { continue; }   // rule 3: no trap under an overlay
             let tgt = if is_key { job.keyLayerName.clone() } else { color_names[bi].clone() };
             let b_box = if is_key { key_box } else { boxes[bi] };
             let Some(b_box)=b_box else { continue };

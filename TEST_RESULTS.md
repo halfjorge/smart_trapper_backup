@@ -26,6 +26,37 @@ all traps.
   included.
 - **Hand:** Sara's hand-trapped after file, measured the same way.
 
+## 2026-10-09 - MEDIUM files with the overlay tick box (rule 3 built)
+
+`medium_check.py <job> --overlay` simulates the box being ticked: MPK skips overlay cutters, the
+engine gets `overlayMode: true`, and the overlay keeps its blend mode on import (the COLOR__ group
+takes it).
+
+| File | Run | Visible change, solid areas | Total incl. soft edges | Colour kept under overlay | Overlay under key p50/p90/p99 px |
+|---|---|---|---|---|---|
+| Mempho | hand | 0.09% | 1.0% | 99.6%, 100% | 2.8 / 5.0 / 5.7 |
+| | box ON, MPK + engine | **0** (was 2.18%) | 0.78% | 100%, 100% (match under 115 u 99.3%) | 3.0 / 6.1 / 7.1 |
+| | box ON, engine only | 0 (was 0.12%) | 0.77% | 100%, 100% | 6.0 / 19 / 51 (not cut) |
+| Helton | hand | 0.05% | 5.7% | 100% | 3.0 / 5.0 / 5.4 |
+| | box ON, MPK + engine | **0** (was 3.45%) | 3.3% | 100% | 3.6 / 6.4 / 7.2 |
+| | box ON, engine only | 0 (was 0.04%) | 2.6% | 100% | 7.1 / 19 / 53 (not cut) |
+
+Trap layers made with the box on and MPK:
+- Mempho: only the three under the key (none under match or 115 u).
+- Helton: under the key, plus 142 U and 2985 U under warm red (solid).
+
+**Nothing changes for solid files.** Checked with `--compare-jobs`, old engine vs new, on traps
+and clean masks:
+
+| File | Box off | Box on |
+|---|---|---|
+| DMB | identical | identical |
+| Phish | identical | identical |
+| Mempho | identical | n/a |
+
+Each was checked with and without MPK. The panel changes only run when the box is ticked. The one
+exception is the red banner hint, which only shows text.
+
 ## 2026-10-09 - MEDIUM files baseline (Mempho, Helton): today's trapper, before any rule-3 change
 
 Measured with the new `tools/example_checks/medium_check.py`. It compares blend-aware composites

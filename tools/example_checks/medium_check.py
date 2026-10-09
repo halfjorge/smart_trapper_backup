@@ -27,9 +27,11 @@ SARA = dict(preflightCleanup=True, alphaThreshold=89, edgeBiasPx=1, keyTrapPullb
 ap = argparse.ArgumentParser(); ap.add_argument('job'); ap.add_argument('--trap', default='5')
 ap.add_argument('--diff', type=int, default=12, help='visible change = any channel differs by more than this (0-255)')
 ap.add_argument('--keep', action='store_true', help='keep the engine job folders')
+ap.add_argument('--overlay', action='store_true', help="simulate the panel box 'File has transparent / overlay layers' ticked: MPK skips overlay cutters, engine overlayMode on")
 ap.add_argument('--paper', default='', help='override paper colour r,g,b (e.g. 255,255,255) - the paper layer is only a screen preview')
 a = ap.parse_args(); job = a.job.rstrip('/')
 TH = SARA['alphaThreshold']; DIFF = a.diff
+if a.overlay: SARA['overlayMode'] = True
 
 def load(d):
     m = json.load(open(f'{d}/meta.json'))
@@ -185,6 +187,7 @@ if os.path.exists(f'{job}/after/meta.json'):
 def mpk():
     cur = {i: alpha[i].astype(np.float32) for i in order}
     for s_i in reversed(order):
+        if a.overlay and s_i != key and overlay[s_i]: continue   # overlay mode: overlays don't cut
         sel = cur[s_i] / 255.0
         for d_i in order:
             if d_i < s_i: cur[d_i] = cur[d_i] * (1 - sel)
@@ -249,7 +252,7 @@ if A is not None:
 
 for use_mpk in (True, False):
     masks = mpk() if use_mpk else {i: alpha[i] for i in order}
-    tag = 'mpk' if use_mpk else 'nompk'
+    tag = ('mpk' if use_mpk else 'nompk') + ('_ov' if a.overlay else '')
     final, clean, traps, pairs = run_engine(masks, tag)
     print(f'\n== trapper {"WITH" if use_mpk else "WITHOUT"} Manual Progressive Knockout: trap layers made:')
     for s_i, t_i, tname, n in pairs:
@@ -265,4 +268,4 @@ for use_mpk in (True, False):
         mo = sum(int((A[i] & ~final[i] & covered).sum()) for i in cols); to = sum(int((final[i] & ~A[i] & covered).sum()) for i in cols)
         print(f'    vs hand masks: ink only in hand {mo:,} px, only in trapper {to:,} px')
     del final, clean, traps, masks
-json.dump(results, open(f'{job}_medium_check.json', 'w'), indent=1)
+json.dump(results, open(f'{job}_medium_check{"_overlay" if a.overlay else ""}.json', 'w'), indent=1)
