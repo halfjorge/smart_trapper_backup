@@ -52,7 +52,7 @@ Helton:
 4. **Prepare Import / Import Traps** (`buildCleanLayerInGroup` about line 1868, `importTraps` about
    line 3139): check whether the CLEAN__ and TRAP__ layers get the overlay's blend mode and opacity
    (or sit in a group that has it). If a Multiply colour's CLEAN layer comes in as Normal, the
-   print changes. Claude could not run Photoshop, so ask Sara to confirm in the layer panel.
+   print changes. CONFIRMED 2026-10-09: they come in as Normal (see step 2 below).
 5. **The test harness** (`tools/example_checks/easy_check.py`) assumes every layer is opaque
    ("top colour wins"). For medium files it needs a blend-aware composite:
    - Multiply: result = below * colour / 255.
@@ -73,8 +73,13 @@ Helton:
    - MPK + engine changes the solid areas: Mempho 2.18%, Helton 3.45% (hand files 0.09% / 0.05%).
    - All of that comes from MPK cutting colours out from under the overlays.
    - Code check: `detectBlendLikeLayers` is only used for the panel's summary text.
-   - Prepare Import makes CLEAN__ with no blend mode, so overlays likely come back Normal. Still to
-     confirm in Photoshop.
+   - Prepare Import: CONFIRMED by Sara 2026-10-09. After Prepare Import the overlay's CLEAN__ layer
+     is Normal, not Multiply.
+     - Cause: `createLayerAboveCurrent` makes a plain new layer (Normal, 100%) for CLEAN__
+       (main.js about line 1928) and for every TRAP__ layer (about lines 3259 and 3314).
+       Nothing copies the blend mode or opacity from the original layer.
+     - Fix: give CLEAN__ and TRAP__ the original layer's blend mode, opacity and fill.
+     - Baseline cost of the bug: about 2.5% of Mempho and 3.6% of Helton change from this alone.
 3. Engine rule-3 changes (item 3). Keep older job.json files working, then cargo test.
 4. Panel: MPK skips overlays as cutters (item 1), fix item 2, confirm item 4 with Sara.
 5. Re-measure, add a dated section to TEST_RESULTS.md, update CHANGES / TRAP_RULES / this file,
