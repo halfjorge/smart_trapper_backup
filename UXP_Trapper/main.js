@@ -20,6 +20,7 @@ const DEFAULTS = {
   keyTrapPullbackPx: 1,
   colorTrapPullbackPx: 0,
   roundTraps: true,
+  closeKeyHalo: false,
   trapPx: 5,
   bridgeUrl: "http://127.0.0.1:8765",
   jobFolder: DEFAULT_JOB_FOLDER,
@@ -53,6 +54,13 @@ function panelMarkup() {
             <span class="check-text" data-for="roundTraps" style="color:#f2f2f2; opacity:1;">Round traps (follow own colour)</span>
           </div>
           <div class="field-help">Traps grow the same 5 px in every direction (round) instead of in a square, and a trap under another colour stops where it gets closer to open paper than to its own colour, so it never wraps around the end of a shape. Turn off to get the old square traps. Under the key nothing changes.</div>
+        </div>
+        <div class="setting-box" title="Fills thin paper gaps (up to 2 px) between a colour and the key with that colour, then traps it under the key as usual. For files where the line work does not quite touch the colours, so a thin paper outline shows around the key (e.g. Phish). Leave off when the artist meant those thin paper lines. Open paper is never filled.">
+          <div class="check-row">
+            <input id="closeKeyHalo" type="checkbox">
+            <span class="check-text" data-for="closeKeyHalo" style="color:#f2f2f2; opacity:1;">Close key halo</span>
+          </div>
+          <div class="field-help">Fills thin paper gaps (up to 2 px) between a colour and the key with that colour, then traps it under the key as usual. For files where the line work does not quite touch the colours, so a thin paper outline shows around the key (e.g. Phish). Leave off when the artist meant those thin paper lines. Open paper is never filled.</div>
         </div>
         <div class="field" title="How solid a pixel must be to count as ink (0-255). Soft edge pixels below this are treated as paper. 90 = about 35% opacity. Only used when Preflight cleanup is on.">
           <div class="field-label">Alpha threshold</div>
@@ -149,6 +157,7 @@ function createController(rootNode) {
       "fullDebug",
       "preflightCleanup",
       "roundTraps",
+      "closeKeyHalo",
       "alphaThreshold",
       "edgeBiasPx",
       "keyTrapPullbackPx",
@@ -270,6 +279,7 @@ function createController(rootNode) {
       fullDebug: !!els.fullDebug.checked,
       preflightCleanup: !!els.preflightCleanup.checked,
       roundTraps: !!els.roundTraps.checked,
+      closeKeyHalo: !!els.closeKeyHalo.checked,
       alphaThreshold: numberOr(els.alphaThreshold.value, DEFAULTS.alphaThreshold),
       edgeBiasPx: numberOr(els.edgeBiasPx.value, DEFAULTS.edgeBiasPx),
       keyTrapPullbackPx: numberOr(els.keyTrapPullbackPx.value, DEFAULTS.keyTrapPullbackPx),
@@ -286,6 +296,7 @@ function createController(rootNode) {
     els.fullDebug.checked = !!s.fullDebug;
     els.preflightCleanup.checked = !!s.preflightCleanup;
     els.roundTraps.checked = !!s.roundTraps;
+    els.closeKeyHalo.checked = !!s.closeKeyHalo;
     els.alphaThreshold.value = String(s.alphaThreshold);
     els.edgeBiasPx.value = String(s.edgeBiasPx);
     els.keyTrapPullbackPx.value = String(s.keyTrapPullbackPx);
@@ -555,6 +566,7 @@ function createController(rootNode) {
         resolution: Number(doc.resolution),
         preflightCleanup: !!getSettings().preflightCleanup,
         trapShape: getSettings().roundTraps ? "round" : "square",
+        closeKeyHaloPx: getSettings().closeKeyHalo ? 2 : 0,
         alphaThreshold: numberOr(getSettings().alphaThreshold, DEFAULTS.alphaThreshold),
         edgeBiasPx: numberOr(getSettings().edgeBiasPx, DEFAULTS.edgeBiasPx),
         keyTrapPullbackPx: numberOr(getSettings().keyTrapPullbackPx, DEFAULTS.keyTrapPullbackPx),
@@ -3387,6 +3399,7 @@ function createController(rootNode) {
       lines.push(
         "Settings: preflightCleanup=" + (!!settings.preflightCleanup) +
         ", roundTraps=" + (!!settings.roundTraps) +
+        ", closeKeyHalo=" + (!!settings.closeKeyHalo) +
         ", alphaThreshold=" + settings.alphaThreshold +
         ", edgeBiasPx=" + settings.edgeBiasPx +
         ", keyTrapPullbackPx=" + settings.keyTrapPullbackPx +
@@ -4051,7 +4064,7 @@ function createController(rootNode) {
       });
     }
 
-    ["fullDebug", "preflightCleanup", "roundTraps", "alphaThreshold", "edgeBiasPx", "keyTrapPullbackPx", "colorTrapPullbackPx", "trapPx"].forEach((id) => {
+    ["fullDebug", "preflightCleanup", "roundTraps", "closeKeyHalo", "alphaThreshold", "edgeBiasPx", "keyTrapPullbackPx", "colorTrapPullbackPx", "trapPx"].forEach((id) => {
       const el = els[id];
       if (!el) return;
       el.addEventListener("change", persistSettingsSilently);

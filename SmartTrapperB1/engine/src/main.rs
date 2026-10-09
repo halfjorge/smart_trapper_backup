@@ -62,6 +62,12 @@ struct JobFile {
     #[serde(default)]
     trapShape: String,
 
+    // "Close key halo": paper gaps up to this many px wide between a colour
+    // and the key are filled with that colour (artist-error halos around the
+    // key line work, e.g. Phish). 0 / missing = off (older job.json files).
+    #[serde(default)]
+    closeKeyHaloPx: u32,
+
     keyLayerName: String,
     paperLayerName: String,
 
@@ -581,11 +587,44 @@ fn main()->Result<()>{
 
     // Clean masks (unchanged rule). "Other colours" union comes from the
     // coverage count instead of re-reading every other PNG each time.
+    // Close key halo: a paper pixel is part of a halo when it sits in a gap no
+    // wider than `halo` px between the key and a colour (distance to key +
+    // distance to that colour <= halo + 1.5). It is given to the nearest colour.
+    // Open paper is never touched: it has no ink on the far side of the gap.
+    let halo=job.closeKeyHaloPx;
+    let mut halo_owner:Vec<u8>=Vec::new();   // 0 = none, else colour index + 1
+    if halo>0 && !color_names.is_empty() && color_names.len()<255 {
+        let cap=halo+1;
+        let dk=fast::capped_dist_sq(&key_mask,w as usize,h as usize,cap);
+        let far=((cap+1)*(cap+1)) as u16;
+        let mut best=vec![far;n];
+        halo_owner=vec![0u8;n];
+        let mut tmp=Vec::new();
+        for (i,p) in plates.iter().enumerate(){
+            p.unpack_into(&mut tmp);
+            let dc=fast::capped_dist_sq(&tmp,w as usize,h as usize,cap);
+            for k in 0..n {
+                if coverage[k]!=0 || key_mask[k]!=0 || dk[k]>=far || dc[k]>=far { continue; }
+                if dc[k] < best[k] {
+                    let gap=(dk[k] as f32).sqrt()+(dc[k] as f32).sqrt();
+                    if gap <= halo as f32 + 1.5 { best[k]=dc[k]; halo_owner[k]=(i+1) as u8; }
+                }
+            }
+        }
+        let total=halo_owner.iter().filter(|v| **v!=0).count();
+        println!("[{:>6.1}s] close key halo ({} px): {} paper px filled", t0.elapsed().as_secs_f32(), halo, total);
+    }
+
     let mut cleans:Vec<fast::Bits>=Vec::new();
     let mut buf=Vec::new();
     for (i, color_name) in color_names.iter().enumerate() {
         plates[i].unpack_into(&mut buf);
         let mut plate=std::mem::take(&mut buf);
+        if !halo_owner.is_empty() {
+            let id=(i+1) as u8; let mut added=0usize;
+            for k in 0..n { if halo_owner[k]==id { plate[k]=1; added+=1; } }
+            if added>0 { println!("         key halo: {} +{} px", color_name, added); }
+        }
         if use_cleanup && edge_bias_px!=0.0{
             let others_union:Vec<u8>=(0..n).map(|k| (coverage[k] > plate[k]) as u8).collect();
             plate=apply_edge_bias_key_constrained(plate,w,h,edge_bias_px,&key_cover_mask,&others_union);
@@ -598,6 +637,7 @@ fn main()->Result<()>{
     }
     drop(plates);
     drop(coverage);
+    drop(halo_owner);
     println!("[{:>6.1}s] clean masks written", t0.elapsed().as_secs_f32());
 
     // Key target pullback is the same for every source colour: compute once.

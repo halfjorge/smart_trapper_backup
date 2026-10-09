@@ -38,6 +38,10 @@ The trapper could report which type a file is when you run it.
 4. Halo of missing pixels around a poor-quality key (artist error) should be closed, then the colour
    trapped under the key (Phish: 1-2 px paper halo). Judgment call -> detect it, report it, and make
    the fix an optional setting rather than automatic.
+   BUILT 2026-10-09: 'Close key halo' checkbox (default off). It fills paper gaps of 2 px or less
+   between a colour and the key with the nearest colour, then traps it under the key as normal.
+   Phish: 97% of the hand-filled halo is closed, the colour matches the hand file in 99.8% of
+   pixels, and nothing else changes.
 5. Don't fill solid under every line. Trapping x px from each side is fine, even if the two sides
    meet in the middle under a thin line.
 
@@ -48,6 +52,9 @@ The trapper could report which type a file is when you run it.
    gaps/halos already in the client art (Phish). It never extends colour onto open paper.
    Today's engine only grows edges where the key covers, so hairlines between two colours stay open
    and get no trap. Fix this; it also covers the Phish key-halo case (rule 4) with the same setting.
+   DECIDED 2026-10-09 (Sara): the colour-to-colour hairline fix is ON HOLD. It can't tell threshold
+   damage from thin paper lines or dots the artist put in on purpose. Only the key halo (rule 4)
+   was built, as its own on/off option.
    Note: manual work rounds soft edges up from ~12-15% opacity; panel threshold 90 (~35%) is stricter.
    Test lower thresholds (~30-40) against the examples.
    Thresholds vary by job: Methane colours ~12-15%; Helton colours exactly 50%, Helton key ~30%
