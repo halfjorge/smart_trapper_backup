@@ -71,7 +71,9 @@ and what Sara used on her last run (Oct 7).
   - Up to about 13 screens.
   - Grey / gradient layers are dithered in the RIP: Xerio RIP 4, 128 micron stochastic (FM) dither.
   - Dithering loses fine detail and subtle tone, so solid ink is preferred wherever possible.
-- **Registration:** the typical window is about 2 px at 300 ppi.
+- **Registration (posters / graphic seps):** allow for about 5 px of drift at 300 ppi. That's why the
+  standard trap is 5 px. (The "2 px window" from the fine-art tests applies to fine art only, not to
+  this app.)
 - **Standard trap:** 5 px at 300 ppi. Hand-made "5 px" traps usually measure about 6 px.
 - **Files must be RGB at 300 ppi.** The panel shows a red banner if they aren't.
 - **No press tests are possible.** All checking is done by simulation and comparison with
