@@ -32,6 +32,10 @@ out of date.
     number boxes taking typing. The scan is now cached per document and the timer pauses while
     typing.
   - Next: HARD (DMB Ocean, gray/gradient layers, rule 7).
+  - 2026-10-12: Wilco (Trap Examples\wilco) was a messy client file. Claude rebuilt it into the
+    standard before structure with tools/arrange (see its README): 6 inks, darkest on top, green
+    Background used as paper. Output is Trap Examples\wilco\Wilco_before_arranged.zip.
+    Open question for Sara: is the green paper stock, or a printed green flood?
   - The group blend mode is set through the UXP DOM (`group.blendMode = orig.blendMode`), which
     is untested in Photoshop. The status log says what it set.
 - The next job is **MEDIUM files**: solid Normal layers plus overlay layers (Multiply / Darken, or
