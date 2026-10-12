@@ -23,6 +23,7 @@ const DEFAULTS = {
   closeKeyHalo: false,
   overlayLayers: false,
   smoothKeyTraps: false,
+  bevelKeyCorners: false,
   trapPx: 5,
   bridgeUrl: "http://127.0.0.1:8765",
   jobFolder: DEFAULT_JOB_FOLDER,
@@ -77,6 +78,13 @@ function panelMarkup() {
             <span class="check-text" data-for="smoothKeyTraps" style="color:#f2f2f2; opacity:1;">Smooth traps under the key</span>
           </div>
           <div class="field-help">Removes thin slivers ('fingers') of trap under the key, where the key line narrows to a tip and the trap gets squeezed between the colour and the key's edge. Bits under about 5 px wide are trimmed; every colour always keeps at least 1-2 px of overlap next to itself. Only traps under the key are touched, and nothing visible changes with all layers on. Leave off to keep traps exactly as before.</div>
+        </div>
+        <div class="setting-box" title="Where a trap under the key runs up to bare paper beside it (a gap in the key, e.g. a cream letter stroke), the end of the trap is cut into a bevel instead of a square corner sitting right against the paper. Traps across thin key lines keep their full width. Only traps under the key are touched, and nothing visible changes with all layers on. Leave off to keep traps exactly as before.">
+          <div class="check-row">
+            <input id="bevelKeyCorners" type="checkbox">
+            <span class="check-text" data-for="bevelKeyCorners" style="color:#f2f2f2; opacity:1;">Bevel trap corners next to paper</span>
+          </div>
+          <div class="field-help">Where a trap under the key runs up to bare paper beside it (a gap in the key, e.g. a cream letter stroke), the end of the trap is cut into a bevel instead of a square corner sitting right against the paper. Traps across thin key lines keep their full width. Only traps under the key are touched, and nothing visible changes with all layers on. Leave off to keep traps exactly as before.</div>
         </div>
         <div class="field" title="How solid a pixel must be to count as ink (0-255). Soft edge pixels below this are treated as paper. 90 = about 35% opacity. Only used when Preflight cleanup is on.">
           <div class="field-label">Alpha threshold</div>
@@ -176,6 +184,7 @@ function createController(rootNode) {
       "closeKeyHalo",
       "overlayLayers",
       "smoothKeyTraps",
+      "bevelKeyCorners",
       "alphaThreshold",
       "edgeBiasPx",
       "keyTrapPullbackPx",
@@ -300,6 +309,7 @@ function createController(rootNode) {
       closeKeyHalo: !!els.closeKeyHalo.checked,
       overlayLayers: !!els.overlayLayers.checked,
       smoothKeyTraps: !!els.smoothKeyTraps.checked,
+      bevelKeyCorners: !!els.bevelKeyCorners.checked,
       alphaThreshold: numberOr(els.alphaThreshold.value, DEFAULTS.alphaThreshold),
       edgeBiasPx: numberOr(els.edgeBiasPx.value, DEFAULTS.edgeBiasPx),
       keyTrapPullbackPx: numberOr(els.keyTrapPullbackPx.value, DEFAULTS.keyTrapPullbackPx),
@@ -319,6 +329,7 @@ function createController(rootNode) {
     els.closeKeyHalo.checked = !!s.closeKeyHalo;
     els.overlayLayers.checked = !!s.overlayLayers;
     els.smoothKeyTraps.checked = !!s.smoothKeyTraps;
+    els.bevelKeyCorners.checked = !!s.bevelKeyCorners;
     els.alphaThreshold.value = String(s.alphaThreshold);
     els.edgeBiasPx.value = String(s.edgeBiasPx);
     els.keyTrapPullbackPx.value = String(s.keyTrapPullbackPx);
@@ -591,6 +602,7 @@ function createController(rootNode) {
         closeKeyHaloPx: getSettings().closeKeyHalo ? 2 : 0,
         overlayMode: !!getSettings().overlayLayers,
         smoothKeyTraps: !!getSettings().smoothKeyTraps,
+        bevelKeyCorners: !!getSettings().bevelKeyCorners,
         alphaThreshold: numberOr(getSettings().alphaThreshold, DEFAULTS.alphaThreshold),
         edgeBiasPx: numberOr(getSettings().edgeBiasPx, DEFAULTS.edgeBiasPx),
         keyTrapPullbackPx: numberOr(getSettings().keyTrapPullbackPx, DEFAULTS.keyTrapPullbackPx),
@@ -3578,6 +3590,7 @@ function createController(rootNode) {
         ", closeKeyHalo=" + (!!settings.closeKeyHalo) +
         ", overlayLayers=" + (!!settings.overlayLayers) +
         ", smoothKeyTraps=" + (!!settings.smoothKeyTraps) +
+        ", bevelKeyCorners=" + (!!settings.bevelKeyCorners) +
         ", alphaThreshold=" + settings.alphaThreshold +
         ", edgeBiasPx=" + settings.edgeBiasPx +
         ", keyTrapPullbackPx=" + settings.keyTrapPullbackPx +
@@ -4269,7 +4282,7 @@ function createController(rootNode) {
       });
     }
 
-    ["fullDebug", "preflightCleanup", "roundTraps", "closeKeyHalo", "overlayLayers", "smoothKeyTraps", "alphaThreshold", "edgeBiasPx", "keyTrapPullbackPx", "colorTrapPullbackPx", "trapPx"].forEach((id) => {
+    ["fullDebug", "preflightCleanup", "roundTraps", "closeKeyHalo", "overlayLayers", "smoothKeyTraps", "bevelKeyCorners", "alphaThreshold", "edgeBiasPx", "keyTrapPullbackPx", "colorTrapPullbackPx", "trapPx"].forEach((id) => {
       const el = els[id];
       if (!el) return;
       el.addEventListener("change", persistSettingsSilently);

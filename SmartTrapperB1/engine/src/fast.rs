@@ -446,6 +446,69 @@ pub fn smooth_key_trap(a: &[u8], w: u32, h: u32, win: Rect, trap: &mut [u8]) -> 
 }
 
 // ---------------------------------------------------------------------------
+// "Bevel trap corners next to paper" (Sara, 2026-10-12)
+// ---------------------------------------------------------------------------
+
+/// Nearest pixel with mask != 0 within radius `r` of (x,y), scanning rows top to
+/// bottom and columns left to right; ties keep the first one found. Returns
+/// (distance squared, dx, dy) or None.
+fn nearest_within(mask: &[u8], w: u32, h: u32, x: i64, y: i64, r: i64) -> Option<(i64, i64, i64)> {
+    let mut best: Option<(i64, i64, i64)> = None;
+    let r2 = r * r;
+    for dy in -r..=r {
+        let ny = y + dy;
+        if ny < 0 || ny >= h as i64 { continue; }
+        let row = ny as usize * w as usize;
+        for dx in -r..=r {
+            let nx = x + dx;
+            if nx < 0 || nx >= w as i64 { continue; }
+            let d2 = dx * dx + dy * dy;
+            if d2 > r2 { continue; }
+            if mask[row + nx as usize] == 0 { continue; }
+            if best.map_or(true, |b| d2 < b.0) { best = Some((d2, dx, dy)); }
+        }
+    }
+    best
+}
+
+/// Search radii for the bevel: own colour within trap+2, open area within 1.5x that (+1).
+pub fn bevel_radii(trap_px: u32) -> (i64, i64) {
+    let r_own = trap_px as i64 + 2;
+    (r_own, ((1.5 * r_own as f64).ceil()) as i64 + 1)
+}
+
+/// Bevel the end of a trap under the key where bare paper (or a colour below the
+/// source that nothing covers) is BESIDE it. `trap` is the window `win`; `a` is the
+/// source colour and `showing` the open area (both full canvas). A trap px is
+/// removed when the open area is closer than 1.5 x its distance to its own colour
+/// AND the open area lies beside it rather than straight across the key line
+/// (angle between the two directions under 135 degrees). Returns px removed.
+pub fn bevel_key_corners(a: &[u8], showing: &[u8], open_d2: &[u16], w: u32, h: u32, win: Rect, trap: &mut [u8], trap_px: u32) -> usize {
+    let ww = win.width() as usize;
+    let (r_own, r_open) = bevel_radii(trap_px);
+    let cos135 = -std::f64::consts::FRAC_1_SQRT_2;
+    let mut removed = 0usize;
+    for y in 0..win.height() as usize {
+        for x in 0..ww {
+            let i = y * ww + x;
+            if trap[i] == 0 { continue; }
+            let gx = (win.x0 as usize + x) as i64;
+            let gy = (win.y0 as usize + y) as i64;
+            // Fast skip: no open area within r_open (exact capped distance) means nothing
+            // can be cut here (a cut needs open area closer than 1.5 x r_own <= r_open).
+            if open_d2[gy as usize * w as usize + gx as usize] as i64 > r_open * r_open { continue; }
+            let Some((do2, ox, oy)) = nearest_within(a, w, h, gx, gy, r_own) else { continue };
+            let Some((dp2, px, py)) = nearest_within(showing, w, h, gx, gy, r_open) else { continue };
+            let (d_own, d_open) = ((do2 as f64).sqrt(), (dp2 as f64).sqrt());
+            if d_open >= 1.5 * d_own { continue; }
+            let cos = (ox * px + oy * py) as f64 / (d_own * d_open).max(1e-9);
+            if cos > cos135 { trap[i] = 0; removed += 1; }
+        }
+    }
+    removed
+}
+
+// ---------------------------------------------------------------------------
 // Ink colour of an exported layer PNG (replaces the bridge's slow Python scan)
 // ---------------------------------------------------------------------------
 

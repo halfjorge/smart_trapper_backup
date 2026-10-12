@@ -219,6 +219,9 @@ and what Sara used on her last run (Oct 7).
 - Smooth traps under the key (`smoothKeyTraps`): off by default (added 2026-10-12). Trims thin
   "fingers" of trap under the key (bits under about 5 px wide). Every colour keeps a 1-2 px ring of
   overlap. Works on any file.
+- Bevel trap corners next to paper (`bevelKeyCorners`): off by default (added 2026-10-12). Cuts the
+  square end of a trap under the key into a bevel where bare paper is beside it (Frankenstein
+  letter strokes). Traps across thin key lines are left alone.
 - Test runs should use Sara's values.
 - Missing fields in older job.json files fall back to the old behaviour.
 

@@ -26,6 +26,19 @@ all traps.
   included.
 - **Hand:** Sara's hand-trapped after file, measured the same way.
 
+## 2026-10-12 - "Bevel trap corners next to paper" (new option, default off)
+
+Engine run on a copy of Sara's Frankenstein job `Untitled-2__UXP__2026-10-12T15-59-41-372Z`:
+
+| Check | Result |
+|---|---|
+| Box off vs Sara's real run (`--compare-jobs`) | identical |
+| Box on vs independent Python reference (`tools/frank_whatif/bevel_ref.py`) | 0 px different, every colour |
+| Trap px removed under the key | green1 20 · hotpink 23 · green2 484 · violet 1,591 · green3 531 · purple 10,997 |
+| Traps not under the key | unchanged |
+| Run time in the cloud | 25.5 s off, 29.8 s on |
+| cargo test | 6/6 |
+
 ## 2026-10-12 - "Smooth traps under the key" (new option, default off)
 
 Engine run on a copy of Sara's Helton job `before.psd__UXP__2026-10-12T12-28-48-291Z`:

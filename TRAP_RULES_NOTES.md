@@ -175,6 +175,13 @@ The trapper could report which type a file is when you run it.
         across the key line (angle between "to own colour" and "to paper" under 135 degrees).
         It removes 13,536 of 1.49 M trap px under the key (0.91%).
   - Proposed as a tick box, default off. Waiting on Sara: test file first, or build?
+  - BUILT 2026-10-12 (Sara: "I agree - let's add that as a tick box").
+    - Tick box "Bevel trap corners next to paper" (job.json `bevelKeyCorners`, default off).
+    - Engine: `fast::bevel_key_corners`, using exact nearest pixels within radius (own colour
+      trap+2, open area 1.5x that +1).
+    - Rule: cut if d_open < 1.5 x d_own AND the angle between them is under 135 degrees.
+    - Applied after "Smooth traps under the key".
+    - Matches an independent Python reference pixel for pixel on Frankenstein (13,646 px).
 
 ## Known issues to investigate later
 - Results sometimes differ when art is full bleed (touches the canvas edge) vs. has a border/gutter.

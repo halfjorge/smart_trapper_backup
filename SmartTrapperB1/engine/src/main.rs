@@ -87,6 +87,17 @@ struct JobFile {
     #[serde(default)]
     smoothKeyTraps: bool,
 
+    // "Bevel trap corners next to paper" (Sara, 2026-10-12, Frankenstein). Off /
+    // missing = the original behaviour. On: where a trap under the key runs up to
+    // bare paper BESIDE it (a gap in the key, e.g. a cream letter stroke), the end
+    // of the trap is cut into a bevel: a trap px is removed if it is closer than
+    // 1.5 x its distance to its own colour to open area (paper / colour below), and
+    // that open area is beside it (angle between "towards own colour" and "towards
+    // open area" under 135 degrees). Paper straight across a key line is ignored,
+    // so traps across thin key lines keep their full width.
+    #[serde(default)]
+    bevelKeyCorners: bool,
+
     keyLayerName: String,
     paperLayerName: String,
 
@@ -713,15 +724,21 @@ fn main()->Result<()>{
         // pixels covered by neither the source itself, any colour above it,
         // nor the key. The canvas edge does not count as showing.
         let mut safe:Vec<u8> = Vec::new();
-        if color_pull>0 || round {
+        let mut showing:Vec<u8> = Vec::new();
+        if color_pull>0 || round || job.bevelKeyCorners {
             let mut hidden:Vec<u8>=a.iter().zip(key_mask.iter()).map(|(x,k)| (*x!=0 || *k!=0) as u8).collect();
             for cj in (ai+1)..color_names.len(){
                 if overlay[cj] { continue; }   // rule 3: an overlay doesn't hide what's under it
                 cleans[cj].unpack_into(&mut c);
                 for k in 0..n { hidden[k]|=c[k]; }
             }
-            let showing:Vec<u8>=hidden.iter().map(|v| (*v==0) as u8).collect();
+            showing=hidden.iter().map(|v| (*v==0) as u8).collect();
             drop(hidden);
+        }
+        let open_d2:Vec<u16> = if job.bevelKeyCorners {
+            fast::capped_dist_sq(&showing,w as usize,h as usize,fast::bevel_radii(trap_px).1 as u32)
+        } else { Vec::new() };
+        if color_pull>0 || round {
             safe = if color_pull>0 {
                 let grown=fast::box_dilate_window(&showing,w,fast::Rect::full(w,h),color_pull);
                 grown.iter().map(|v| (*v==0) as u8).collect()
@@ -764,6 +781,11 @@ fn main()->Result<()>{
             if is_key && job.smoothKeyTraps {
                 let removed=fast::smooth_key_trap(&a,w,h,win,&mut trap);
                 println!("[{:>6.1}s] smooth traps under key: {} under {}: {} thin px removed", t0.elapsed().as_secs_f32(), src, tgt, removed);
+                if !trap.iter().any(|v| *v!=0) { continue; }
+            }
+            if is_key && job.bevelKeyCorners {
+                let removed=fast::bevel_key_corners(&a,&showing,&open_d2,w,h,win,&mut trap,trap_px);
+                println!("[{:>6.1}s] bevel trap corners next to paper: {} under {}: {} px removed", t0.elapsed().as_secs_f32(), src, tgt, removed);
                 if !trap.iter().any(|v| *v!=0) { continue; }
             }
 
