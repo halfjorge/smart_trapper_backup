@@ -24,8 +24,14 @@ out of date.
     from solid-file behaviour.
   - Simulated results: Mempho and Helton have 0 solid-area change. Easy files are identical with
     the box on or off.
-  - **Waiting for Sara** to run Mempho and Helton in Photoshop (BUILD_AND_TEST_ENGINE.bat, Reload,
-    tick the box) and to check that the COLOR__ group shows Multiply / Darken after Prepare Import.
+  - DONE 2026-10-12: Sara ran Mempho and Helton in Photoshop with the box ticked. Both have 0
+    solid-area change vs the client, the COLOR__ groups were set to Multiply / Darken, and the
+    numbers match the simulation exactly (TEST_RESULTS.md). MEDIUM is signed off pending Sara's
+    visual check.
+  - 2026-10-12 panel fix: the 2 s banner timer had started scanning layers, which stopped the
+    number boxes taking typing. The scan is now cached per document and the timer pauses while
+    typing.
+  - Next: HARD (DMB Ocean, gray/gradient layers, rule 7).
   - The group blend mode is set through the UXP DOM (`group.blendMode = orig.blendMode`), which
     is untested in Photoshop. The status log says what it set.
 - The next job is **MEDIUM files**: solid Normal layers plus overlay layers (Multiply / Darken, or

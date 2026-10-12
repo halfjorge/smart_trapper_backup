@@ -26,6 +26,22 @@ all traps.
   included.
 - **Hand:** Sara's hand-trapped after file, measured the same way.
 
+## 2026-10-12 - Helton, Sara's real Photoshop run with the overlay box ticked
+
+Job folder `before.psd__UXP__2026-10-12T12-28-48-291Z`. Settings are the same as the Mempho run.
+The engine logged "overlay mode ON: 1 overlay colour: 2985 U (darken)".
+
+| Check | Result |
+|---|---|
+| Visible change vs client, solid areas | **0** (soft-edge zone 3.30%, the same as the simulation; hand file 5.7%) |
+| 142 U kept under 2985 U Darken (knockout and final) | 100% / 100% |
+| Colours under the key after knockout | 0 |
+| Trap under the key, p50/p90/p99 | 3.0-3.6 / 6.1-6.4 / 7.1-7.2 px (hand file 3.0 / 5.0 / 5.4) |
+| Trap layers | 5: three under the key, plus 142 U and 2985 U under warm red (solid). None under 2985 U |
+| Prepare Import | COLOR__2985 U set to Darken 100% (status log) |
+
+**MEDIUM files (rule 3) pass on both examples in real Photoshop runs.**
+
 ## 2026-10-12 - Mempho, Sara's real Photoshop run with the overlay box ticked
 
 Job folder `before.psd__UXP__2026-10-12T12-24-30-173Z`. Settings: overlay box on, threshold 90,
