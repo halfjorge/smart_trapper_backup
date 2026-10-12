@@ -26,6 +26,26 @@ all traps.
   included.
 - **Hand:** Sara's hand-trapped after file, measured the same way.
 
+## 2026-10-12 - Mempho, Sara's real Photoshop run with the overlay box ticked
+
+Job folder `before.psd__UXP__2026-10-12T12-24-30-173Z`. Settings: overlay box on, threshold 90,
+edge bias 0 (engine uses 1), key pullback 1, colour pullback 0, round, trap 5. Engine was rebuilt
+at 12:15 and logged "overlay mode ON: 2 overlay colours".
+
+Steps: Manual Progressive Knockout, Run Trapper, Prepare Import, Import Traps.
+
+| Check | Result |
+|---|---|
+| Visible change vs client, solid areas | **0** (soft-edge zone 0.78%, the same as the simulation) |
+| 2985 U kept under match / under 115 u (knockout and final) | 100% / 100% |
+| match kept under 115 u | 95.2% after knockout, 99.3% final (6k px, soft edges) |
+| Colours under the key after knockout | 0 (cut, as rule 3 says) |
+| Overlay trap under the key, p50/p90/p99 | 3.0-3.6 / 6.1-6.4 / 7.1 px |
+| Trap layers | 3, all under the key |
+| Prepare Import | COLOR__match and COLOR__115 u set to Multiply 100% (status log) |
+
+The number boxes took edits: colour pullback went from 2 back to 0 after the focus fix.
+
 ## 2026-10-09 - MEDIUM files with the overlay tick box (rule 3 built)
 
 `medium_check.py <job> --overlay` simulates the box being ticked: MPK skips overlay cutters, the
