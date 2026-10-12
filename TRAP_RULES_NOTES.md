@@ -142,6 +142,19 @@ The trapper could report which type a file is when you run it.
   has 68%.
 
 ## Open questions
+- "Fingers" under the key (Sara, 2026-10-12, Helton). Thin slivers of trap where the key line narrows
+  to a tip or horn: the 5 px trap grows into the tip but stops 1 px inside the key's edge (key
+  pullback), so it is squeezed thin. Not visible with all layers on.
+  - Counts, thin bits under 5 px wide:
+    - Helton trapper about 1,500 pieces of 142 U (hand file 1,260).
+    - Mempho trapper about 200-280 per colour.
+    The hand files have about as many.
+  - Offline what-if, app not changed: smooth the trap under the key (opening), always keeping the
+    first 1.5 px next to the colour.
+    - Removing bits under 3 px wide: 0.1-0.2% of trap px.
+    - Removing bits under 5 px wide: 0.4-1.4% of trap px, and up to 2.5% of the trap right at
+      the key edge is lost.
+  - Waiting on Sara: does she want this (as an on/off option?), and at what strength?
 
 ## Known issues to investigate later
 - Results sometimes differ when art is full bleed (touches the canvas edge) vs. has a border/gutter.
