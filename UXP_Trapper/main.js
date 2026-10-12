@@ -2913,6 +2913,20 @@ function createController(rootNode) {
       "and Trap width is above 0, then Run Trapper again (step back in History first if CLEAN layers were built).";
   }
   let lastFileCheckText = null;
+  let overlayNamesCache = [];
+  let overlayCacheDocKey = "";
+  let editingNumberBox = false;   // true while a number box has the cursor
+  function docKeyOf(doc) {
+    if (!doc) return "";
+    let id = "", title = "";
+    try { id = String(doc.id); } catch (e) {}
+    try { title = String(doc.title); } catch (e) {}
+    return id + "|" + title;
+  }
+  function refreshOverlayCache(doc) {
+    overlayCacheDocKey = docKeyOf(doc);
+    try { overlayNamesCache = overlayLayerNames(doc); } catch (e) { overlayNamesCache = []; }
+  }
   function updateFileCheckBanner() {
     const el = els && els.fileCheckBanner;
     if (!el) return;
@@ -2927,7 +2941,12 @@ function createController(rootNode) {
     try {
       const s = getSettings();
       if (doc && !s.overlayLayers) {
-        const ov = overlayLayerNames(doc);
+        // Layer scan only when the document changes (or on Refresh), never on
+        // every 2-second tick: reading every layer from Photoshop that often
+        // took keyboard focus away from the number boxes (2026-10-12).
+        const key = docKeyOf(doc);
+        if (key !== overlayCacheDocKey) refreshOverlayCache(doc);
+        const ov = overlayNamesCache;
         if (ov.length) {
           parts.push("THIS FILE HAS OVERLAY LAYERS\n  " + ov.join("\n  ") +
             "\n  Tick 'File has transparent / overlay layers' before Manual Progressive Knockout,\n  Run Trapper and Prepare Import, or the overprints will change.");
@@ -2943,6 +2962,7 @@ function createController(rootNode) {
   }
 
   async function refreshDocumentSummary() {
+    try { refreshOverlayCache(app.activeDocument); } catch (e) { overlayNamesCache = []; overlayCacheDocKey = ""; }
     try { updateFileCheckBanner(); } catch (e) {}
     let doc = null;
     try {
@@ -4256,8 +4276,10 @@ function createController(rootNode) {
       const el = els[id];
       if (!el) return;
       let lastGood = String(el.value);
-      el.addEventListener("focus", () => { lastGood = String(el.value); });
+      el.addEventListener("focus", () => { lastGood = String(el.value); editingNumberBox = true; });
+      el.addEventListener("blur", () => { editingNumberBox = false; });
       el.addEventListener("change", () => {
+        editingNumberBox = false;
         const text = String(el.value).trim();
         const n = Number(text);
         if (text === "" || !Number.isFinite(n)) {
@@ -4303,7 +4325,9 @@ function createController(rootNode) {
     await refreshDocumentSummary();
     // Re-check the open document every couple of seconds (switching files,
     // changing mode or image size all update the red banner).
-    setInterval(() => { try { updateFileCheckBanner(); } catch (e) {} }, 2000);
+    // Skipped while a number box is being typed in, so nothing talks to
+    // Photoshop (and steals the cursor) mid-edit.
+    setInterval(() => { if (editingNumberBox) return; try { updateFileCheckBanner(); } catch (e) {} }, 2000);
     setStatus("Ready.\n\nThis panel is the UXP foundation for the trapper rewrite.");
     resetRunProgress("Idle");
   }
