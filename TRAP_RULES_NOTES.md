@@ -161,6 +161,21 @@ The trapper could report which type a file is when you run it.
     - Engine `fast::smooth_key_trap`, with a unit test against a plain version.
     - Helton engine output equals the test file pixel for pixel.
 
+- "Trap corners" under the key next to bare paper (Sara, 2026-10-12, Frankenstein ribbon at "MON").
+  - Where a colour's trap under the key runs up to a paper gap in the key (the cream letter
+    strokes), the trap end comes out square, right against the paper.
+  - Sara hand-cut it into a bevel: rows 5/4/3/2/1 px up from the colour stop about 7/5/3/2/0 px
+    short of the paper.
+  - Offline what-ifs, app not changed:
+    - Today's corner rule (kept if paper >= own) only nicks 2-4 px.
+    - "B": kept if distance to paper >= 1.5 x distance to own colour. Matches her bevel.
+      - On its own it also shortens traps across thin key lines that have paper on the far side:
+        about 40% of its cut, about 2,200 px within 3 px of the colour.
+      - "B corners only" fixes that: it only cuts where the paper is beside the trap, not straight
+        across the key line (angle between "to own colour" and "to paper" under 135 degrees).
+        It removes 13,536 of 1.49 M trap px under the key (0.91%).
+  - Proposed as a tick box, default off. Waiting on Sara: test file first, or build?
+
 ## Known issues to investigate later
 - Results sometimes differ when art is full bleed (touches the canvas edge) vs. has a border/gutter.
   Suspect: some engine steps treat the canvas edge as "no ink" (e.g. key pullback erodes at the edge).
