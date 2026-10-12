@@ -79,6 +79,14 @@ struct JobFile {
     #[serde(default)]
     overlayMode: bool,
 
+    // "Smooth traps under the key" (Sara, 2026-10-12). Off / missing = the
+    // original behaviour. On: thin "fingers" of trap under the key (where the
+    // key narrows to a tip) are removed: colour + trap is opened with a 5x5
+    // ellipse, and only trap pixels in the opened shape or in the first ring
+    // next to the colour are kept. Only traps under the key are touched.
+    #[serde(default)]
+    smoothKeyTraps: bool,
+
     keyLayerName: String,
     paperLayerName: String,
 
@@ -752,7 +760,12 @@ fn main()->Result<()>{
                     (&b,&b_allow)
                 } else { (&b,&b) }
             };
-            let Some((win,trap))=fast::compute_pair_trap(&a,bm,allow,w,h,a_box,b_box,trap_px,round) else { continue };
+            let Some((win,mut trap))=fast::compute_pair_trap(&a,bm,allow,w,h,a_box,b_box,trap_px,round) else { continue };
+            if is_key && job.smoothKeyTraps {
+                let removed=fast::smooth_key_trap(&a,w,h,win,&mut trap);
+                println!("[{:>6.1}s] smooth traps under key: {} under {}: {} thin px removed", t0.elapsed().as_secs_f32(), src, tgt, removed);
+                if !trap.iter().any(|v| *v!=0) { continue; }
+            }
 
             let file_name=format!("TRAP__{}_over_{}.png",sanitize(&src),sanitize(&tgt));
             write_mask_png_window(&traps_dir.join(&file_name),w,h,win,&trap,job.resolution)?;

@@ -155,6 +155,11 @@ The trapper could report which type a file is when you run it.
     - Removing bits under 5 px wide: 0.4-1.4% of trap px, and up to 2.5% of the trap right at
       the key edge is lost.
   - Waiting on Sara: does she want this (as an on/off option?), and at what strength?
+  - BUILT 2026-10-12: Sara reviewed the Helton test file and said "let's add that".
+    - Tick box "Smooth traps under the key" (job.json `smoothKeyTraps`, default off).
+    - Strong strength: opening with a 5x5 ellipse, keeping the first ring next to the colour.
+    - Engine `fast::smooth_key_trap`, with a unit test against a plain version.
+    - Helton engine output equals the test file pixel for pixel.
 
 ## Known issues to investigate later
 - Results sometimes differ when art is full bleed (touches the canvas edge) vs. has a border/gutter.

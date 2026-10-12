@@ -212,6 +212,9 @@ and what Sara used on her last run (Oct 7).
 - File has transparent / overlay layers (`overlayMode`): off by default (rule 3, added 2026-10-09).
   Tick it only for files with Multiply/Darken or under-100% layers. When off, everything works as
   before. The red banner names any overlay layers it finds while the box is off.
+- Smooth traps under the key (`smoothKeyTraps`): off by default (added 2026-10-12). Trims thin
+  "fingers" of trap under the key (bits under about 5 px wide). Every colour keeps a 1-2 px ring of
+  overlap. Works on any file.
 - Test runs should use Sara's values.
 - Missing fields in older job.json files fall back to the old behaviour.
 

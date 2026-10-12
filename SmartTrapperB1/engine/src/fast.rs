@@ -363,6 +363,89 @@ pub fn compute_pair_trap(
 }
 
 // ---------------------------------------------------------------------------
+// "Smooth traps under the key" (Sara, 2026-10-12): remove thin "fingers"
+// ---------------------------------------------------------------------------
+
+/// 5x5 ellipse (the same shape as OpenCV's MORPH_ELLIPSE 5x5 used in the
+/// Helton test file): removes bits narrower than about 5 px.
+const SMOOTH_KERNEL: [(i32, i32); 17] = [
+    (0, -2), (-2, -1), (-1, -1), (0, -1), (1, -1), (2, -1), (-2, 0), (-1, 0), (0, 0),
+    (1, 0), (2, 0), (-2, 1), (-1, 1), (0, 1), (1, 1), (2, 1), (0, 2),
+];
+
+/// Smooth a trap under the key. `trap` is the window `win` returned by
+/// `compute_pair_trap`; `a` is the source colour (full canvas).
+///   shape = colour + trap, opened (eroded then dilated) with SMOOTH_KERNEL;
+///   a trap pixel is kept if it is in the opened shape, or within the first
+///   ring (3x3) next to the colour, so the colour always keeps an overlap.
+/// Pixels outside the canvas are ignored (the canvas edge never erodes).
+/// Returns how many trap pixels were removed.
+pub fn smooth_key_trap(a: &[u8], w: u32, h: u32, win: Rect, trap: &mut [u8]) -> usize {
+    let ww = win.width() as usize;
+    let r4 = win.grow(4, w, h);
+    let r2 = win.grow(2, w, h);
+    let (w4, h4) = (r4.width() as usize, r4.height() as usize);
+    // shape = colour | trap over r4
+    let mut shape = vec![0u8; w4 * h4];
+    for y in 0..h4 {
+        let gy = r4.y0 as usize + y;
+        for x in 0..w4 {
+            let gx = r4.x0 as usize + x;
+            let mut v = a[gy * w as usize + gx];
+            if gy >= win.y0 as usize && gy < win.y1 as usize && gx >= win.x0 as usize && gx < win.x1 as usize {
+                v |= trap[(gy - win.y0 as usize) * ww + (gx - win.x0 as usize)];
+            }
+            shape[y * w4 + x] = (v != 0) as u8;
+        }
+    }
+    let at4 = |gx: i64, gy: i64| -> Option<u8> {
+        if gx < 0 || gy < 0 || gx >= w as i64 || gy >= h as i64 { return None; }
+        Some(shape[(gy as usize - r4.y0 as usize) * w4 + (gx as usize - r4.x0 as usize)])
+    };
+    // erode over r2
+    let (w2, h2) = (r2.width() as usize, r2.height() as usize);
+    let mut eroded = vec![0u8; w2 * h2];
+    for y in 0..h2 {
+        let gy = (r2.y0 as usize + y) as i64;
+        for x in 0..w2 {
+            let gx = (r2.x0 as usize + x) as i64;
+            let mut on = true;
+            for &(dx, dy) in SMOOTH_KERNEL.iter() {
+                if at4(gx + dx as i64, gy + dy as i64) == Some(0) { on = false; break; }
+            }
+            eroded[y * w2 + x] = on as u8;
+        }
+    }
+    // dilate over win, then keep = trap & (opened | ring next to the colour)
+    let mut removed = 0usize;
+    for y in 0..win.height() as usize {
+        let gy = (win.y0 as usize + y) as i64;
+        for x in 0..ww {
+            let i = y * ww + x;
+            if trap[i] == 0 { continue; }
+            let gx = (win.x0 as usize + x) as i64;
+            let mut opened = false;
+            for &(dx, dy) in SMOOTH_KERNEL.iter() {
+                let (ex, ey) = (gx + dx as i64, gy + dy as i64);
+                if ex < 0 || ey < 0 || ex >= w as i64 || ey >= h as i64 { continue; }
+                if eroded[(ey as usize - r2.y0 as usize) * w2 + (ex as usize - r2.x0 as usize)] != 0 { opened = true; break; }
+            }
+            if opened { continue; }
+            let mut ring = false;
+            'r: for dy in -1i64..=1 {
+                for dx in -1i64..=1 {
+                    let (nx, ny) = (gx + dx, gy + dy);
+                    if nx < 0 || ny < 0 || nx >= w as i64 || ny >= h as i64 { continue; }
+                    if a[ny as usize * w as usize + nx as usize] != 0 { ring = true; break 'r; }
+                }
+            }
+            if !ring { trap[i] = 0; removed += 1; }
+        }
+    }
+    removed
+}
+
+// ---------------------------------------------------------------------------
 // Ink colour of an exported layer PNG (replaces the bridge's slow Python scan)
 // ---------------------------------------------------------------------------
 
@@ -632,6 +715,51 @@ mod tests {
             assert_eq!(got, want, "case {case} w={w} h={h} r={r}");
         }
         assert!(nonempty > 50, "test should exercise real traps, got {nonempty}");
+    }
+
+    /// smooth_key_trap (windowed) must equal a plain full-canvas version:
+    /// opening of colour|trap with the 5x5 ellipse (outside the canvas ignored),
+    /// keep trap px that are in the opening or touch the colour (3x3).
+    #[test]
+    fn smooth_key_trap_matches_plain_version() {
+        let mut rng = Rng(2026);
+        let mut removed_any = 0;
+        for case in 0..150 {
+            let w = 3 + rng.below(70) as u32;
+            let h = 3 + rng.below(50) as u32;
+            let a = { let nb = 1 + rng.below(3) as u32; random_mask(&mut rng, w, h, nb, 2) };
+            let key = { let nb = 1 + rng.below(4) as u32; random_mask(&mut rng, w, h, nb, 2) };
+            let allow = erode_n(key.clone(), w, h, 1);
+            let r = 1 + rng.below(6) as u32;
+            let (Some(ab), Some(bb)) = (bbox(&a, w, h), bbox(&key, w, h)) else { continue };
+            let Some((win, buf)) = compute_pair_trap(&a, &key, &allow, w, h, ab, bb, r, false) else { continue };
+            let before = embed(win, &buf, w, h);
+            // plain version
+            let (wi, hi) = (w as i64, h as i64);
+            let shape: Vec<u8> = (0..(w * h) as usize).map(|i| (a[i] | before[i] != 0) as u8).collect();
+            let get = |m: &Vec<u8>, x: i64, y: i64| -> Option<u8> {
+                if x < 0 || y < 0 || x >= wi || y >= hi { None } else { Some(m[(y * wi + x) as usize]) }
+            };
+            let mut er = vec![0u8; (w * h) as usize];
+            for y in 0..hi { for x in 0..wi {
+                er[(y * wi + x) as usize] = SMOOTH_KERNEL.iter().all(|&(dx, dy)| get(&shape, x + dx as i64, y + dy as i64) != Some(0)) as u8;
+            }}
+            let mut want = before.clone();
+            for y in 0..hi { for x in 0..wi {
+                let i = (y * wi + x) as usize;
+                if before[i] == 0 { continue; }
+                let opened = SMOOTH_KERNEL.iter().any(|&(dx, dy)| get(&er, x + dx as i64, y + dy as i64) == Some(1));
+                let ring = (-1..=1).any(|dy| (-1..=1).any(|dx| get(&a, x + dx, y + dy) == Some(1)));
+                if !opened && !ring { want[i] = 0; }
+            }}
+            let mut got_buf = buf.clone();
+            let n = smooth_key_trap(&a, w, h, win, &mut got_buf);
+            let got = embed(win, &got_buf, w, h);
+            assert_eq!(got, want, "case {case} w={w} h={h} r={r}");
+            assert_eq!(n, before.iter().zip(&want).filter(|(b, w)| **b != 0 && **w == 0).count());
+            if n > 0 { removed_any += 1; }
+        }
+        assert!(removed_any > 10, "test should remove real fingers, got {removed_any}");
     }
 
     #[test]

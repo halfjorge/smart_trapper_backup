@@ -26,6 +26,18 @@ all traps.
   included.
 - **Hand:** Sara's hand-trapped after file, measured the same way.
 
+## 2026-10-12 - "Smooth traps under the key" (new option, default off)
+
+Engine run on a copy of Sara's Helton job `before.psd__UXP__2026-10-12T12-28-48-291Z`:
+
+| Check | Result |
+|---|---|
+| Box off vs Sara's real run (`--compare-jobs`) | identical |
+| Box on, trap px removed under the key | 142 U 23,736 · 2985 U 24,838 · warm red 1,297 (of 3.65 M) |
+| Box on vs the Helton test file Sara reviewed | 0 px different, colour by colour |
+| Traps not under the key (142 / 2985 under warm red) | unchanged |
+| cargo test | 6/6 (new: smooth_key_trap_matches_plain_version) |
+
 ## 2026-10-12 - Helton, Sara's real Photoshop run with the overlay box ticked
 
 Job folder `before.psd__UXP__2026-10-12T12-28-48-291Z`. Settings are the same as the Mempho run.
