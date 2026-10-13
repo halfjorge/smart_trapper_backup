@@ -207,7 +207,9 @@ and what Sara used on her last run (Oct 7).
 - Alpha threshold (`alphaThreshold`): 8 by default; Sara 89-90, about 35% opacity counts as ink.
 - Edge bias (`edgeBiasPx`): 0 by default; Sara 1. It grows colours back only where the key covers
   them. The engine treats 0-1 as 1 (minimum, since 2026-10-09), so colours always touch the key.
-- Key trap pullback (`keyTrapPullbackPx`): 1 default; Sara 1.
+- Key trap pullback (`keyTrapPullbackPx`): 1 default; Sara 1. Since 2026-10-13 the trap is kept back
+  only from open area beside the key (paper / uncovered lower colour), never from its own colour's
+  side, so 2+ no longer opens a white ring between a colour and its trap.
 - Colour trap pullback (`colorTrapPullbackPx`): **keep 0 by default** (decided 2026-10-09). Use 2 only by
   choice on dot-heavy files (e.g. Byrne's calendar dots), where a sliver of trap peeking past small
   shapes would show. At 2 those spots keep only 1 px of overlap, against about 5 px of poster drift.

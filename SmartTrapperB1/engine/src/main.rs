@@ -746,8 +746,11 @@ fn main()->Result<()>{
     }
     println!("[{:>6.1}s] clean masks written", t0.elapsed().as_secs_f32());
 
-    // Key target pullback is the same for every source colour: compute once.
-    let key_allow=fast::box_erode_full(&key_mask,w,h,key_trap_pullback_px);
+    // Key trap pullback (2026-10-13, Peteschaw white lines): the trap under the key is kept
+    // back only from OPEN area beside the key (paper, or a colour below that nothing covers),
+    // worked out per source colour below. It used to shrink the key on every edge, so at
+    // pullback 2+ a ring opened between each colour and its own trap. With pullback 0 the
+    // whole key is allowed.
     let key_box=fast::bbox(&key_mask,w,h);
 
     let mut out=TrapsOut{traps:vec![]};
@@ -772,7 +775,7 @@ fn main()->Result<()>{
         // nor the key. The canvas edge does not count as showing.
         let mut safe:Vec<u8> = Vec::new();
         let mut showing:Vec<u8> = Vec::new();
-        if color_pull>0 || round || job.bevelKeyCorners {
+        if color_pull>0 || round || job.bevelKeyCorners || key_trap_pullback_px>0 {
             let mut hidden:Vec<u8>=a.iter().zip(key_mask.iter()).map(|(x,k)| (*x!=0 || *k!=0) as u8).collect();
             for cj in (ai+1)..color_names.len(){
                 if overlay[cj] { continue; }   // rule 3: an overlay doesn't hide what's under it
@@ -782,6 +785,13 @@ fn main()->Result<()>{
             showing=hidden.iter().map(|v| (*v==0) as u8).collect();
             drop(hidden);
         }
+        // Where this colour's trap may go under the key: the key, minus anything within the
+        // pullback (square, same reach as the old shrink) of open area. The canvas edge is not
+        // open area.
+        let key_allow:Vec<u8> = if key_trap_pullback_px>0 {
+            let near=fast::box_dilate_window(&showing,w,fast::Rect::full(w,h),key_trap_pullback_px);
+            key_mask.iter().zip(near.iter()).map(|(k,o)| (*k!=0 && *o==0) as u8).collect()
+        } else { Vec::new() };
         let open_d2:Vec<u16> = if job.bevelKeyCorners {
             fast::capped_dist_sq(&showing,w as usize,h as usize,fast::bevel_radii(trap_px).1 as u32)
         } else { Vec::new() };
@@ -815,7 +825,7 @@ fn main()->Result<()>{
             let b_box = if is_key { key_box } else { boxes[bi] };
             let Some(b_box)=b_box else { continue };
             let (bm,allow):(&[u8],&[u8]) = if is_key {
-                (&key_mask,&key_allow)
+                (&key_mask, if key_trap_pullback_px>0 {&key_allow} else {&key_mask})
             } else {
                 cleans[bi].unpack_into(&mut b);
                 if color_pull>0 || round {

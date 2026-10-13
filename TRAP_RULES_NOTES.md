@@ -205,6 +205,11 @@ The trapper could report which type a file is when you run it.
 ## Known issues to investigate later
 - Results sometimes differ when art is full bleed (touches the canvas edge) vs. has a border/gutter.
   Suspect: some engine steps treat the canvas edge as "no ink" (e.g. key pullback erodes at the edge).
+  (2026-10-13: key pullback no longer treats the canvas edge as open area.)
+- Key trap pullback 2+ made a white ring between each colour and its own trap under the key
+  (Peteschaw 14:01 run). FIXED 2026-10-13: the key used to be shrunk on every edge; now the trap is
+  kept back only from open area (paper / a colour below that nothing covers), per source colour.
+  Pullback 2 on Peteschaw: 2.59 M ring px filled, nothing new near paper, nothing outside the key.
 
 ## Examples so far
 - DMB: colours supplied as full "sheets"; knocked out with 6-7 px overlap. Today's trapper (after

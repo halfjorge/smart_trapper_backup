@@ -26,6 +26,20 @@ all traps.
   included.
 - **Hand:** Sara's hand-trapped after file, measured the same way.
 
+## 2026-10-13 - Key trap pullback from open area only (fix, always on)
+
+| Job (as run) | Pixels added under the key (per colour, summed) | Outside the key | New ink near paper |
+|---|---|---|---|
+| PETESCHAW 11:52 (pullback 1) | 83,311 (58 px of new ink overall) | 0 | 0 |
+| Untitled-1 | 310 | 0 | 0 |
+| Frankenstein | 3,477 | 0 | 0 |
+| before.psd 12-24 | 2,043 | 0 | 0 |
+| Helton | 2,280 | 0 | 0 |
+| PETESCHAW 14:12 settings at pullback 2, follow box off | 2,586,364 (the white ring) | 0 | 0 |
+
+Engine identical to the offline test version Sara checked (Peteschaw_pullback2_fixed.psd).
+Scripts: `tools/pullback_test`.
+
 ## 2026-10-13 - "Key traps follow the colour you see" (new option, default off)
 
 Engine run on copies of all 5 finished job folders. Test: move the key 2 px (and 4 px) in 8
