@@ -17,6 +17,6 @@ for i,l in enumerate(p):
         full[y0:y1, x0:x1] = a[:y1-y0,:x1-x0]
     np.save(f'{out}/{i}.npy', full)
     al=full[...,3]
-    meta.append((i,l.name,str(l.blend_mode),int((al>127).sum())))
+    meta.append((i,l.name,str(l.blend_mode),int((al>127).sum()),int(l.opacity),int(getattr(l,'fill_opacity',255))))
     print(i, repr(l.name), l.blend_mode, 'ink px >50%:', int((al>127).sum()), 'partial px:', int(((al>0)&(al<255)).sum()))
 import json; json.dump(dict(W=W,H=H,layers=meta), open(f'{out}/meta.json','w'))
