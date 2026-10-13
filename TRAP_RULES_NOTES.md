@@ -234,3 +234,8 @@ The trapper could report which type a file is when you run it.
   Nothing visible changes when in register; no new ink near paper. Correction: the masks are
   already knocked out (0 px of art under the key); the ink the rule removes under the key is the
   trapper's own 1 px edge growth / heal pass and traps, not client art.
+- DMB Bourbon (looked at 2026-10-13, then set aside: Sara - "a file like that can only be cleaned
+  up by hand"). Client art is blurry (46% of the key's pixels soft). Hand file = every layer made
+  solid at about 44% (alpha 112; the black matches to ~2,000 px of 11.9 M), then normal knockout +
+  ~5 px trap; grey Multiply left under the black almost everywhere. Today's trapper leaves the soft
+  key as supplied. Idea parked: a "clean up soft / blurry art" box (solid at one cut-off, key too).
