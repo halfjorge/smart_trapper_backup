@@ -196,6 +196,11 @@ The trapper could report which type a file is when you run it.
     - The owner is added to its trap under the key; later opaque colours are removed there (clean
       layer and every trap of theirs). Applied before smoothing and bevel.
     - Engine `fast::key_edge_owner`; the clean layers are written after the owner map.
+  - Tested 2026-10-13, NOT used (Sara preferred the version in her code): a visible colour keeps
+    the first 1 px under the key next to itself, plus smoothing leaves the rule's pixels alone.
+    It stopped olive/marigold butting the thin edges of light-blue speckles (68,569 px -> 0 on
+    the 14:12 run), but olive then starts 1 px further from the blue lines. Test code and PSD
+    builder: tools/peteschaw_whatif (fast_ring_test.rs, main_ring_test.rs, build_pete.py).
 
 ## Known issues to investigate later
 - Results sometimes differ when art is full bleed (touches the canvas edge) vs. has a border/gutter.
