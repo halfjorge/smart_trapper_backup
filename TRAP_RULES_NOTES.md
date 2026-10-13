@@ -206,3 +206,12 @@ The trapper could report which type a file is when you run it.
 - DMB Ocean: gray/gradient layers - see rule 7 and open questions.
 - BTS (type 1, easy): client file already knocked out. Manual work FILLED lower colours under upper
   ones: normal ~5 px traps plus big flat fills (see open questions). Orange moved down the stack.
+- Peteschaw (2026-10-13, offline test only, tools/peteschaw_whatif): olive prints under blue and is
+  trapped to blue, but blue (1-2 px sliver) sits between olive and the key, so under the key blue is on
+  top and peeks out when the key misregisters. Same thing one level down: olive sits on top of
+  marigold under the key next to visible marigold. What-if rule "the colour you see next to the key
+  owns the 5 px under it" (thin slivers count as the colour they lie against, 1.5 px paper guard):
+  key shifted 2 px in 8 directions, wrong colour peeking out 11.1% -> 0.6% (4 px: 11.8% -> 0.9%).
+  Nothing visible changes when in register; no new ink near paper. Correction: the masks are
+  already knocked out (0 px of art under the key); the ink the rule removes under the key is the
+  trapper's own 1 px edge growth / heal pass and traps, not client art.
