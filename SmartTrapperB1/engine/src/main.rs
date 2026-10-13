@@ -98,6 +98,18 @@ struct JobFile {
     #[serde(default)]
     bevelKeyCorners: bool,
 
+    // "Key traps follow the colour you see" (Sara, 2026-10-13, Peteschaw). Off /
+    // missing = the original behaviour. On: under the key, within the trap width of
+    // the key edge, the colour you see next to that spot (in register) must be the
+    // one on top, so that is what peeks out when the key is off register. That colour
+    // is added to its trap under the key where missing, and colours printed later are
+    // taken out there (their clean layer and traps). A visible sliver under 3 px of a
+    // later colour counts as the colour it lies against. Nothing changes within
+    // (key pullback + 0.5) px of visible paper. Overlays are never owners and are
+    // never cut. Nothing visible changes when everything is in register.
+    #[serde(default)]
+    keyTrapsFollowVisible: bool,
+
     keyLayerName: String,
     paperLayerName: String,
 
@@ -675,6 +687,10 @@ fn main()->Result<()>{
     }
 
     let mut cleans:Vec<fast::Bits>=Vec::new();
+    // With "key traps follow the colour you see" the clean layers are written later
+    // (after the owner map), so keep the uncut versions until then.
+    let own_on=job.keyTrapsFollowVisible;
+    let mut uncut:Vec<fast::Bits>=Vec::new();
     let mut buf=Vec::new();
     for (i, color_name) in color_names.iter().enumerate() {
         plates[i].unpack_into(&mut buf);
@@ -689,7 +705,8 @@ fn main()->Result<()>{
             plate=apply_edge_bias_key_constrained(plate,w,h,edge_bias_px,&key_cover_mask,&others_union);
         }
         let file_name=format!("CLEAN__{}.png",sanitize(color_name));
-        write_mask_png(&clean_masks_dir.join(&file_name),&plate,w,h,job.resolution)?;
+        if own_on { uncut.push(fast::Bits::pack(&plate)); }
+        else { write_mask_png(&clean_masks_dir.join(&file_name),&plate,w,h,job.resolution)?; }
         if job.cutTopKey { apply_key_cut_in_place(&mut plate, &key_mask); }
         cleans.push(fast::Bits::pack(&plate));
         buf=plate;
@@ -697,6 +714,36 @@ fn main()->Result<()>{
     drop(plates);
     drop(coverage);
     drop(halo_owner);
+    // Owner map for "key traps follow the colour you see": 0 = leave alone, else
+    // colour index + 1 that must be on top at that key pixel.
+    let owner:Vec<u8> = if own_on && color_names.len()<255 {
+        let mut vis=vec![0u8;n];
+        let mut tmp=Vec::new();
+        for (i,cb) in cleans.iter().enumerate(){
+            if overlay[i] { continue; }
+            cb.unpack_into(&mut tmp);
+            for k in 0..n { if tmp[k]!=0 { vis[k]=(i+1) as u8; } }
+        }
+        for k in 0..n { if key_mask[k]!=0 { vis[k]=255; } }
+        let o=fast::key_edge_owner(&vis,color_names.len(),w,h,trap_px,job.keyTrapPullbackPx as f32+0.5);
+        let total=o.iter().filter(|v| **v!=0).count();
+        println!("[{:>6.1}s] key traps follow the colour you see: {} key px given to the colour next to them", t0.elapsed().as_secs_f32(), total);
+        o
+    } else { Vec::new() };
+    // Pixels where colour `i` must give way: a LOWER colour owns them.
+    let gives_way=|i:usize,k:usize|->bool { !owner.is_empty() && !overlay[i] && owner[k]!=0 && (owner[k] as usize) < i+1 };
+    if own_on {
+        let mut tmp=Vec::new();
+        for (i,color_name) in color_names.iter().enumerate(){
+            uncut[i].unpack_into(&mut tmp);
+            let mut cut=0usize;
+            for k in 0..n { if tmp[k]!=0 && gives_way(i,k) { tmp[k]=0; cut+=1; } }
+            if cut>0 { println!("         {}: {} px under the key given to a colour below", color_name, cut); }
+            let file_name=format!("CLEAN__{}.png",sanitize(color_name));
+            write_mask_png(&clean_masks_dir.join(&file_name),&tmp,w,h,job.resolution)?;
+        }
+        drop(uncut);
+    }
     println!("[{:>6.1}s] clean masks written", t0.elapsed().as_secs_f32());
 
     // Key target pullback is the same for every source colour: compute once.
@@ -777,7 +824,47 @@ fn main()->Result<()>{
                     (&b,&b_allow)
                 } else { (&b,&b) }
             };
-            let Some((win,mut trap))=fast::compute_pair_trap(&a,bm,allow,w,h,a_box,b_box,trap_px,round) else { continue };
+            let computed=fast::compute_pair_trap(&a,bm,allow,w,h,a_box,b_box,trap_px,round);
+            let computed=if owner.is_empty() { computed } else {
+                // Key traps follow the colour you see: take out what a lower colour owns,
+                // and (trap under the key) add what this colour owns.
+                let id=(ai+1) as u8;
+                let adds = is_key && owner.iter().zip(a.iter()).any(|(o,x)| *o==id && *x==0);
+                if adds {
+                    let mut full=vec![0u8;n];
+                    if let Some((win,trap))=&computed {
+                        let ww=win.width() as usize;
+                        for y in 0..win.height() as usize {
+                            let row=(win.y0 as usize+y)*w as usize+win.x0 as usize;
+                            full[row..row+ww].copy_from_slice(&trap[y*ww..(y+1)*ww]);
+                        }
+                    }
+                    let mut added=0usize;
+                    for k in 0..n { if owner[k]==id && a[k]==0 && full[k]==0 { full[k]=1; added+=1; } }
+                    let mut cut=0usize;
+                    for k in 0..n { if full[k]!=0 && gives_way(ai,k) { full[k]=0; cut+=1; } }
+                    println!("[{:>6.1}s] key traps follow the colour you see: {} under {}: +{} px, -{} px", t0.elapsed().as_secs_f32(), src, tgt, added, cut);
+                    fast::bbox(&full,w,h).map(|win|{
+                        let ww=win.width() as usize; let mut t=vec![0u8;ww*win.height() as usize];
+                        for y in 0..win.height() as usize {
+                            let row=(win.y0 as usize+y)*w as usize+win.x0 as usize;
+                            t[y*ww..(y+1)*ww].copy_from_slice(&full[row..row+ww]);
+                        }
+                        (win,t)
+                    })
+                } else {
+                    computed.and_then(|(win,mut trap)|{
+                        let ww=win.width() as usize; let mut cut=0usize;
+                        for y in 0..win.height() as usize {
+                            let row=(win.y0 as usize+y)*w as usize+win.x0 as usize;
+                            for x in 0..ww { if trap[y*ww+x]!=0 && gives_way(ai,row+x) { trap[y*ww+x]=0; cut+=1; } }
+                        }
+                        if cut>0 { println!("[{:>6.1}s] key traps follow the colour you see: {} under {}: -{} px", t0.elapsed().as_secs_f32(), src, tgt, cut); }
+                        if trap.iter().any(|v| *v!=0) { Some((win,trap)) } else { None }
+                    })
+                }
+            };
+            let Some((win,mut trap))=computed else { continue };
             if is_key && job.smoothKeyTraps {
                 let removed=fast::smooth_key_trap(&a,w,h,win,&mut trap);
                 println!("[{:>6.1}s] smooth traps under key: {} under {}: {} thin px removed", t0.elapsed().as_secs_f32(), src, tgt, removed);

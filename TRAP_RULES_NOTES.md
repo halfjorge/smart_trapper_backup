@@ -183,6 +183,20 @@ The trapper could report which type a file is when you run it.
     - Applied after "Smooth traps under the key".
     - Matches an independent Python reference pixel for pixel on Frankenstein (13,646 px).
 
+- "Key traps follow the colour you see" (Sara, 2026-10-13, Peteschaw: "it should apply to any color
+  in any file where the logic is needed").
+  - Problem: pairwise traps seed from the colour each one touches. Olive touches a 1-2 px blue line,
+    not the key, so under the key blue ends up on top and peeks out when the key is off register.
+    Same one level down: olive on top of marigold under the key next to visible marigold.
+  - BUILT 2026-10-13 as a tick box (job.json `keyTrapsFollowVisible`, default off).
+    - What shows in register (opaque colours only; overlays left out) -> slivers under 3 px of a
+      later colour within 2 px of a lower visible colour count as that lower colour.
+    - Each key px within trap px of the key edge belongs to the nearest visible class (paper or a
+      colour; ties go to the lower one). Nothing within pullback + 0.5 px of visible paper.
+    - The owner is added to its trap under the key; later opaque colours are removed there (clean
+      layer and every trap of theirs). Applied before smoothing and bevel.
+    - Engine `fast::key_edge_owner`; the clean layers are written after the owner map.
+
 ## Known issues to investigate later
 - Results sometimes differ when art is full bleed (touches the canvas edge) vs. has a border/gutter.
   Suspect: some engine steps treat the canvas edge as "no ink" (e.g. key pullback erodes at the edge).

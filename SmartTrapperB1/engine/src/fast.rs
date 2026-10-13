@@ -509,6 +509,72 @@ pub fn bevel_key_corners(a: &[u8], showing: &[u8], open_d2: &[u16], w: u32, h: u
 }
 
 // ---------------------------------------------------------------------------
+// "Key traps follow the colour you see" (Sara, 2026-10-13, Peteschaw)
+// ---------------------------------------------------------------------------
+
+/// Who owns each spot under the key edge.
+/// `vis`: what shows with every layer on, per pixel: 255 = key, 0 = paper,
+/// c = colour index + 1 (opaque colours only; overlays are left out by the caller).
+/// Steps:
+///  1. a visible sliver of colour c thinner than 3 px (gone after a 3x3 opening)
+///     that lies within 2 px of a visible LOWER colour counts as that lower colour
+///     (lowest one first) - e.g. a 1-2 px blue line between olive and the key;
+///  2. every key pixel within `trap_px` of the key edge belongs to the nearest
+///     visible class (paper or a colour; ties go to the lower one);
+///  3. nothing is given out within `guard` px of visible paper (key pullback).
+/// Returns per pixel: 0 = leave alone, else colour index + 1 that must be on top.
+pub fn key_edge_owner(vis: &[u8], ncolors: usize, w: u32, h: u32, trap_px: u32, guard: f32) -> Vec<u8> {
+    let n = vis.len();
+    let full = Rect::full(w, h);
+    let mut vp = vis.to_vec();
+    let mut buf = vec![0u8; n];
+    for ci in 2..=ncolors as u8 {
+        for k in 0..n { buf[k] = (vis[k] == ci) as u8; }
+        let er = box_erode_full(&buf, w, h, 1);
+        let opened = box_dilate_window(&er, w, full, 1);
+        drop(er);
+        let mut any = false;
+        for k in 0..n {
+            let thin = buf[k] != 0 && opened[k] == 0;
+            buf[k] = thin as u8;
+            any |= thin;
+        }
+        drop(opened);
+        if !any { continue; }
+        let mut low = vec![0u8; n];
+        for li in 1..ci {
+            for k in 0..n { low[k] = (vis[k] == li) as u8; }
+            let near = box_dilate_window(&low, w, full, 2);
+            for k in 0..n {
+                if buf[k] != 0 && near[k] != 0 && vp[k] == ci { vp[k] = li; }
+            }
+        }
+    }
+    drop(buf);
+    let (wu, hu) = (w as usize, h as usize);
+    let far = ((trap_px + 1) * (trap_px + 1)) as u16;
+    let mut best = vec![far; n];
+    let mut owner = vec![0u8; n];
+    let mut paper_d2: Vec<u16> = Vec::new();
+    let mut m = vec![0u8; n];
+    for c in 0..=ncolors as u8 {
+        let mut any = false;
+        for k in 0..n { let on = vp[k] == c; m[k] = on as u8; any |= on; }
+        if !any { continue; }
+        let d2 = capped_dist_sq(&m, wu, hu, trap_px);
+        for k in 0..n { if d2[k] < best[k] { best[k] = d2[k]; owner[k] = c; } }
+        if c == 0 { paper_d2 = d2; }
+    }
+    let lim = (trap_px * trap_px) as u16;
+    let g2 = guard * guard;
+    for k in 0..n {
+        let near_paper = !paper_d2.is_empty() && (paper_d2[k] as f32) <= g2;
+        if vis[k] != 255 || best[k] > lim || near_paper { owner[k] = 0; }
+    }
+    owner
+}
+
+// ---------------------------------------------------------------------------
 // Ink colour of an exported layer PNG (replaces the bridge's slow Python scan)
 // ---------------------------------------------------------------------------
 
@@ -887,5 +953,27 @@ mod tests {
             }
             assert_eq!(t.result(), python_rule(&px), "{px:?}");
         }
+    }
+
+    #[test]
+    fn key_edge_owner_sees_through_thin_sliver() {
+        // one row pattern, 12 rows tall: olive(1) x0..10, blue(2) sliver x10..12, key x12..30, paper x30..40
+        let (w, h) = (40u32, 12u32);
+        let mut vis = vec![0u8; (w * h) as usize];
+        for y in 0..h as usize {
+            for x in 0..w as usize {
+                vis[y * w as usize + x] = if x < 10 { 1 } else if x < 12 { 2 } else if x < 30 { 255 } else { 0 };
+            }
+        }
+        let o = key_edge_owner(&vis, 2, w, h, 5, 1.5);
+        let row = 6 * w as usize;
+        // key px 1..5 from the sliver belong to olive, not blue
+        for x in 12..17 { assert_eq!(o[row + x], 1, "x={x}"); }
+        // deep in the key and next to paper: left alone
+        assert_eq!(o[row + 20], 0);
+        assert_eq!(o[row + 29], 0);
+        // outside the key: never touched
+        assert_eq!(o[row + 5], 0);
+        assert_eq!(o[row + 11], 0);
     }
 }

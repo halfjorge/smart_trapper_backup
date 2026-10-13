@@ -26,6 +26,26 @@ all traps.
   included.
 - **Hand:** Sara's hand-trapped after file, measured the same way.
 
+## 2026-10-13 - "Key traps follow the colour you see" (new option, default off)
+
+Engine run on copies of all 5 finished job folders. Test: move the key 2 px (and 4 px) in 8
+directions; where the key used to be, does the colour seen next to that spot in register show?
+(Spots in the key pullback next to paper and the canvas edge are left out.)
+Script: `tools/peteschaw_whatif/own_eval.py`.
+
+| Job | Colours (overlays) | Box off vs current engine | Wrong colour, key 2 px off: today -> box on | 4 px off | Change outside the key | New ink near paper | Run time off -> on |
+|---|---|---|---|---|---|---|---|
+| PETESCHAW | 3 (0) | identical | 12.0% -> 0.1% | 11.9% -> 0.4% | 0 px | 0 | 22 -> 27 s |
+| Untitled-1 | 3 (1) | identical | 6.4% -> 0.0% | 6.6% -> 0.0% | 0 px | 0 | 11 -> 15 s |
+| Untitled-2 (Frankenstein) | 6 (0) | identical | 1.8% -> 0.0% | 2.1% -> 0.1% | 0 px | 0 | 25 -> 36 s |
+| before.psd 12-24 | 3 (2) | identical | 0.0% -> 0.0% | 0.0% -> 0.0% | 0 px | 0 | 4 -> 5 s |
+| before.psd 12-28 (Helton) | 3 (1) | identical | 0.3% -> 0.0% | 0.3% -> 0.0% | 0 px | 0 | 10 -> 13 s |
+
+- Frankenstein with smoothing + bevel also on: 1.6% -> 0.0%, no change outside the key.
+- Tried letting smoothing keep the pixels this rule gives a colour: Peteschaw 0.6% -> 0.5% (old
+  metric). Not worth it, smoothing left as is.
+- cargo test (fast.rs): 7/7 (new test: olive sees through a thin blue line to the key).
+
 ## 2026-10-12 - "Bevel trap corners next to paper" (new option, default off)
 
 Engine run on a copy of Sara's Frankenstein job `Untitled-2__UXP__2026-10-12T15-59-41-372Z`:

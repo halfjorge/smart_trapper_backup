@@ -222,6 +222,9 @@ and what Sara used on her last run (Oct 7).
 - Bevel trap corners next to paper (`bevelKeyCorners`): off by default (added 2026-10-12). Cuts the
   square end of a trap under the key into a bevel where bare paper is beside it (Frankenstein
   letter strokes). Traps across thin key lines are left alone.
+- Key traps follow the colour you see (`keyTrapsFollowVisible`): off by default (added 2026-10-13).
+  Under the key, the colour seen next to the key edge goes on top in the trap zone; later colours
+  are taken out there (Peteschaw olive under a thin blue line). Any colour, any file.
 - Test runs should use Sara's values.
 - Missing fields in older job.json files fall back to the old behaviour.
 
