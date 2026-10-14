@@ -12,3 +12,10 @@ Sara: gradients in files like this are halftoned or dithered by the RIP; pink = 
 Visible change vs client 1.37% (soft edges 1.30%, solid 0.07%); colours under grays kept 99.7-100%.
 Vs Sara's hand after: the only real difference is that the hand file did not knock colours out under
 SOLID colours above (rule 7) - 91-99% of the hand-only ink is hidden under solid colours above.
+
+## "Cut back" (Sara 2026-10-14, after the Ocean butt problem) - cutback.py
+Knock-out-then-regrow left 14% of Ocean's key edge butting (client 1.0%, hand 0.9%): it removed
+client ink that was correctly under the key and didn't grow it all back. Cut back instead:
+client layers untouched; ink removed only > 5 px inside the key or a SOLID colour above; big-gray
+layers (>50% gradient) left alone; overlays don't cover; empty key px within 5 px of a visible
+colour get filled (client butts). Ocean: butting key edge 0.51%, visible change 0.01%.
