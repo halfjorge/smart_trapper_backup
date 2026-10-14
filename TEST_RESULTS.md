@@ -26,6 +26,20 @@ all traps.
   included.
 - **Hand:** Sara's hand-trapped after file, measured the same way.
 
+## 2026-10-14 - 50% opacity fix + halo never fills with an overlay (fixes, always on)
+
+Baltimore (DMB BALTIMORE FINAL, Sara's 10:06 job, her exact settings incl. halo 2 px):
+| Check | Result |
+|---|---|
+| Current engine vs Sara's run | identical |
+| Sara's after.pdf (layers rebuilt) vs engine output | identical, every colour |
+| SHADOW PURPLE / SHADOW KEY soft edge (35-70%) kept, before fix | 2.4% / 0.8% (RED 99.9%) |
+| SHADOW PURPLE on client paper | 24,008 -> 6,569 px |
+| SHADOW KEY on client paper | 3,054 -> 2,158 px |
+| Layer 1 on client paper (halo, solid colour - unchanged by design) | 27,535 -> 27,742 px |
+| Other 5 job folders | identical |
+Scripts: `tools/luke_martin`.
+
 ## 2026-10-13 - Key trap pullback from open area only (fix, always on)
 
 | Job (as run) | Pixels added under the key (per colour, summed) | Outside the key | New ink near paper |

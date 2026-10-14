@@ -214,7 +214,8 @@ and what Sara used on her last run (Oct 7).
   choice on dot-heavy files (e.g. Byrne's calendar dots), where a sliver of trap peeking past small
   shapes would show. At 2 those spots keep only 1 px of overlap, against about 5 px of poster drift.
 - Round traps (`trapShape` "round"): on by default; Sara on.
-- Close key halo (`closeKeyHaloPx` 2 when ticked): off by default (rule 4).
+- Close key halo (`closeKeyHaloPx` 2 when ticked): off by default (rule 4). Never fills with an overlay
+  colour (2026-10-14). Leave it off on art with thin paper strokes beside the key (Baltimore).
 - File has transparent / overlay layers (`overlayMode`): off by default (rule 3, added 2026-10-09).
   Tick it only for files with Multiply/Darken or under-100% layers. When off, everything works as
   before. The red banner names any overlay layers it finds while the box is off.

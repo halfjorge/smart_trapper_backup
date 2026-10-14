@@ -624,8 +624,22 @@ fn main()->Result<()>{
     let mut ink:BTreeMap<String,serde_json::Value>=BTreeMap::new();
     for name in &color_names {
         let meta=find_file_meta(&job,name)?;
-        let (mw,mh,alpha,color)=read_png_alpha(&job_folder.join(&meta.png),true)?;
+        let (mw,mh,mut alpha,color)=read_png_alpha(&job_folder.join(&meta.png),true)?;
         if mw!=w||mh!=h{ anyhow::bail!("mask size mismatch for {}", name); }
+        // A layer under 100% opacity / fill is exported with that opacity baked into its pixels
+        // (a 50% layer's most solid pixel comes out at 128). Scale it back up before the
+        // threshold, so the layer is cut at the same share of its own artwork as every other
+        // layer (Baltimore 2026-10-14: the 50% shadows lost all edges between 35% and 70%).
+        // Only done when the pixels really look baked (nothing above the expected maximum).
+        let strength=(meta.opacity.clamp(0.0,100.0)/100.0)*(meta.fillOpacity.clamp(0.0,100.0)/100.0);
+        if strength>0.0 && strength<0.995 {
+            let expected=(255.0*strength).round() as u32;
+            let mx=alpha.iter().copied().max().unwrap_or(0) as u32;
+            if mx>0 && mx<=expected+2 {
+                for v in alpha.iter_mut() { *v=((*v as f64)/strength).round().min(255.0) as u8; }
+                println!("[{:>6.1}s] {}: layer at {:.0}% - pixels scaled back to full strength before the threshold", t0.elapsed().as_secs_f32(), name, strength*100.0);
+            }
+        }
         let plate=threshold(&alpha,alpha_threshold);
         drop(alpha);
         for k in 0..n { if plate[k]!=0 { coverage[k]=coverage[k].saturating_add(1); } }
@@ -672,6 +686,10 @@ fn main()->Result<()>{
         halo_owner=vec![0u8;n];
         let mut tmp=Vec::new();
         for (i,p) in plates.iter().enumerate(){
+            // An overlay (rule 3) never fills a halo: a 50% / Multiply colour filling a paper
+            // gap doesn't close it, it just prints a tint where paper was meant to show
+            // (Baltimore 2026-10-14: SHADOW PURPLE on thin cream strokes next to the key).
+            if overlay[i] { continue; }
             p.unpack_into(&mut tmp);
             let dc=fast::capped_dist_sq(&tmp,w as usize,h as usize,cap);
             for k in 0..n {

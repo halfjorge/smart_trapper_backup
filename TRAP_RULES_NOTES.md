@@ -46,6 +46,11 @@ The trapper could report which type a file is when you run it.
    - Easy files: identical with the box on or off.
    Not yet done: the trapper reporting the file type by itself. For now the banner warns when
    overlays are found and the box is off.
+   FIXED 2026-10-14 (Baltimore / DMB Luke Martin): a layer under 100% opacity is exported with the
+   opacity baked into its pixels (50% layer: most solid pixel = 128), so the alpha threshold cut it at
+   70% of its artwork instead of 35%. The engine now scales such a layer back to full strength before
+   the threshold (only when its pixels really look baked). Not tied to the tick box.
+   MPK check on Baltimore: colours under the 50% shadows were kept 100% (MPK skipped the overlays).
 4. Halo of missing pixels around a poor-quality key (artist error) should be closed, then the colour
    trapped under the key (Phish: 1-2 px paper halo). Judgment call -> detect it, report it, and make
    the fix an optional setting rather than automatic.
@@ -53,6 +58,10 @@ The trapper could report which type a file is when you run it.
    between a colour and the key with the nearest colour, then traps it under the key as normal.
    Phish: 97% of the hand-filled halo is closed, the colour matches the hand file in 99.8% of
    pixels, and nothing else changes.
+   2026-10-14 (Baltimore): an overlay never fills a halo (with the overlay box on) - a 50% shadow
+   filling a paper gap prints a tint where paper was meant to show. On artwork with thin paper
+   strokes beside the key (Baltimore's cream feather highlights) the halo fills those strokes with
+   solid colours too: leave the box off on files like that.
 5. Don't fill solid under every line. Trapping x px from each side is fine, even if the two sides
    meet in the middle under a thin line.
 
