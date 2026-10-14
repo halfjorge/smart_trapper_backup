@@ -14,7 +14,8 @@ SET = dict(preflightCleanup=True, alphaThreshold=90, edgeBiasPx=0, keyTrapPullba
            keyTrapsFollowVisible=True)
 TH = SET['alphaThreshold']
 m = json.load(open(f'{EX}/before/meta.json')); L = m['layers']
-order = [l[0] for l in L][1:]; key = order[-1]; cols = order[:-1]
+PAPER = [int(x) for x in os.environ.get('PAPER_LAYERS', '0').split(',')]
+order = [l[0] for l in L if l[0] not in PAPER]; key = order[-1]; cols = order[:-1]
 names = {l[0]: l[1] for l in L}; opac = {l[0]: (l[4] if len(l) > 4 else 255) / 255 for l in L}
 ov = {i: opac[i] < 0.999 or 'NORMAL' not in L[i][2] for i in order}
 raw = {i: np.load(f'{EX}/before/{i}.npy', mmap_mode='r') for i in order}
@@ -51,7 +52,7 @@ files = [dict(kind='KEY', name='KEY', blendMode='normal', opacity=100, fillOpaci
 for i in cols:
     eng = cur[i].copy(); eng[gray[i] & (cur[i] > 0)] = 255
     save(eng, f'{OUT}/masks/{i}.png', colour[i])
-    d = dict(name=nm[i], blendMode='normal', opacity=round(opac[i]*100), fillOpacity=100)
+    d = dict(name=nm[i], blendMode=L[i][2].split('.')[-1].lower(), opacity=round(opac[i]*100), fillOpacity=100)
     cl.append(d); files.append(dict(kind='COLOR', png=f'masks/{i}.png', **d))
 json.dump(dict(docName='Huron', widthPx=W, heightPx=H, resolution=300, keyLayerName='KEY', paperLayerName='paper',
                colors=cl, files=files, **SET), open(OUT + '/job.json', 'w'))

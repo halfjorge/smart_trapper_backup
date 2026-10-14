@@ -1,7 +1,8 @@
 # Compare the gray-aware result with the client file (blend-aware, pink at its opacity).
-import sys, json, numpy as np, cv2
+import sys, os, json, numpy as np, cv2
 EX, OUT = sys.argv[1], sys.argv[2]; s = 2
-m = json.load(open(f'{EX}/before/meta.json')); L = m['layers']; order = [l[0] for l in L][1:]; key = order[-1]; cols = order[:-1]
+m = json.load(open(f'{EX}/before/meta.json')); L = m['layers']; PAPER = [int(x) for x in os.environ.get('PAPER_LAYERS', '0').split(',')]
+order = [l[0] for l in L if l[0] not in PAPER]; key = order[-1]; cols = order[:-1]
 opac = {l[0]: (l[4] if len(l) > 4 else 255) / 255 for l in L}
 raw = {i: np.load(f'{EX}/before/{i}.npy', mmap_mode='r') for i in order}
 al = {i: np.asarray(raw[i][::s, ::s, 3]) for i in order}
@@ -12,10 +13,12 @@ for i in cols:
     a = R[f'clean_{i}'][::s, ::s].astype(np.float32)
     for k in range(len(tg[str(i)])): a = np.maximum(a, R[f'trap_{i}_{k}'][::s, ::s])
     fin[i] = a / 255
+pp = PAPER[-1]; paper_rgb = np.median(np.asarray(np.load(f'{EX}/before/{pp}.npy', mmap_mode='r')[::16, ::16, :3]).reshape(-1, 3), axis=0)
+mult = {i: 'MULTIPLY' in L[i][2] for i in order}
 def comp(get):
-    o = np.full(al[key].shape + (3,), 255, np.float32)
+    o = np.broadcast_to(paper_rgb.astype(np.float32), al[key].shape + (3,)).copy()
     for i in order:
-        A = get(i)[..., None] * opac[i]; o = o * (1 - A) + rgb[i] * A
+        A = get(i)[..., None] * opac[i]; o = o * (1 - A) + ((o * rgb[i] / 255) if mult[i] else rgb[i]) * A
     return o
 c = comp(lambda i: al[i] / 255.)
 r = comp(lambda i: al[key] / 255. if i == key else fin[i])
