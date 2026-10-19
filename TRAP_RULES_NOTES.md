@@ -127,6 +127,10 @@ The trapper could report which type a file is when you run it.
   edge meets the key, A's band carries on under the key (same angle) to the key trap depth, so the
   A/B/key corner is covered (examples: light blue outline along blue stems, yellow band along the
   cream at the key).
+- **Inside frame corners crisp and square** (Sara's after screenshot): no bevel on the key trap where
+  the key wraps round a colour's corner. Only at real corners, not along curves.
+- **Shallow joints are different** (edge runs along the key rather than into it, > 45 deg off):
+  no mitre line there; keep the overlap, only clear slivers/dots. (Offline pass 2026-10-19 evening.)
 - **No doubled ink.** A pixel must not be in two layers of the same colour (CLEAN + TRAP or two
   TRAPs): it does not change the separation, but shows as a dark line in Sara's multiply preview
   and reads as an error.

@@ -38,3 +38,17 @@ trap growth via closing), tidy.py (no doubled ink + pin-hole fill under key). DR
 specks.py (stray dots under key), extend_bands.py (carry A-under-B trap bands into the key).
 Next: Sara's own square-trap re-run (300 ppi, trapPx 5, round off, follow-visible off) + a
 joint-mitre pass on top of it. See PROJECT_NOTES.md section 0.
+
+## 2026-10-19 evening: joint-mitre pass on Sara's square-trap run (Obey_roundtraps_off.pdf)
+No psd-tools needed (not installable in the cloud workspace):
+1. `python3 pdf2psb.py Obey_roundtraps_off.pdf new` -> new.bin (raw Layr block; the PDF holds 9600x12000)
+2. `python3 layr_read.py new.bin L 9600 12000` -> L/layers.json + L/m_<i>.npy (packed masks)
+3. `python3 labels_from_layers.py L` -> labels.npy (top-most art colour per pixel, Key = 7)
+4. `python3 mitre.py L F` -> F/m_<i>.npy for changed layers, F/joint_log.json, F/zones.npy
+   (straight joints: split along the A|B edge line within 2 trap widths; shallow/curved: keep overlap,
+   clear slivers < 5 px; square real corners; loose dots; no doubled ink). Trap depth D=12 at 600 ppi.
+5. `python3 mitre_check.py L F` -> must say ALL CHECKS PASS
+6. F/changed.npy (union of changed pixels) -> hidden magenta layer
+7. `python3 psd_write.py new.bin L F out.psd 600` then `python3 psd_verify.py out.psd L F`
+render.py / charmap.py: multiply-preview crops and per-pixel layer maps for checking joints.
+Delivered: Trap Examples\Obey\Obey_roundtraps_off_MITRED_600.zip

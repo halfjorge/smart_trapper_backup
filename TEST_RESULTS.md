@@ -26,6 +26,25 @@ all traps.
   included.
 - **Hand:** Sara's hand-trapped after file, measured the same way.
 
+## 2026-10-19 evening - Obey square-trap run + joint-mitre pass (offline, NOT in the engine)
+- Source: Trap Examples\Obey\Obey_roundtraps_off.pdf (Sara's panel run: 600 ppi 9600x12000 in the
+  PDF, trapPx 5 @300 -> 12 px under key, round OFF, follow-visible OFF). Reference: Sara's before/after
+  screenshots of the top-left frame (hand-mitred joints, square inside corners, dots gone).
+- tools/obey: layr_read.py (no psd-tools needed) -> mitre.py -> mitre_check.py -> psd_write.py -> psd_verify.py.
+
+| Check | Result |
+|---|---|
+| Key joints found / mitred / gentle (shallow, curved, short) | 88 / 60 / 28 |
+| Pixels changed (all under the key) | 11,354 |
+| Separation changed outside the key, any colour | 0 px |
+| Doubled ink (same colour in 2 layers): trapper output -> fixed | 1,846 -> 0 |
+| Bare key pixels inside the 12 px trap band | 122,713 -> 120,959 |
+| Square corners filled (bevel removed) | 561 px at 134 corners |
+| Trap lost away from joints | loose dots only (~30 px, covered by another colour) |
+| PSD read back (independent reader) | 45 layers, 600 ppi, 0 px mismatch |
+
+Delivered: Obey_roundtraps_off_MITRED_600.zip + Obey_mitre_before_after.png. Waiting for Sara.
+
 ## 2026-10-19 - Obey (geometric, flat + key), offline joint-fix and bleed what-ifs
 - Source: Trap Examples\Obey\Sepped_GM-SHEP-AUTO TRAP.pdf (trapper output, 600 ppi 9600x12000,
   trapPx 10, round ON, follow-visible ON) and Sara's partly hand-cleaned _CLEANED.pdf (11 joint spots).

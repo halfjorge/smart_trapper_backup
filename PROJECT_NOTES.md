@@ -14,7 +14,38 @@ out of date.
 
 ---
 
-## 0. NEXT SESSION STARTS HERE (handoff 2026-10-19, Obey)
+## 0. NEXT SESSION STARTS HERE (update 2026-10-19 evening, Obey mitre pass delivered)
+
+**Waiting for Sara's check:** `Trap Examples\Obey\Obey_roundtraps_off_MITRED_600.zip` (PSD, 9600 x 12000
+@ 600 ppi, same 44 layers as her run minus the PDF's white "Layer 1", plus a HIDDEN magenta layer
+"CHANGED PIXELS (mitre pass)" showing every changed pixel) and `Obey_mitre_before_after.png`.
+Built offline from her `Obey_roundtraps_off.pdf` (square traps, 12 px under the key) by
+tools/obey/mitre.py, modelled on her before/after screenshots of the top-left frame. Nothing in
+her panel/engine code changed.
+- What the pass does (only under the key; 11,354 px changed in total):
+  1. 60 straight joints mitred: the trap zone under the key is split along the continuation of
+     the two colours' shared edge, within 2 trap widths (24 px) of the joint. Each colour's trap
+     ends on its own edge line; the overlap on the far side of the line is removed (as Sara did by hand).
+  2. 28 shallow / curved / very short joints: NO line (that caused the flower-area wedges before).
+     Solid overlap kept; only slivers/dots < 5 px wide on the other colour's side moved.
+  3. Square corners: 561 px filled at 134 real corners (where the key wraps round a colour corner;
+     these were bevelled by bevelKeyCorners). Not along curved edges.
+  4. Loose dots of key trap cut off from their own colour removed (~30 px) when another colour
+     already covers the spot; 28 px kept because removing them would leave bare key.
+  5. Doubled ink cleared: the trapper's own output had 1,846 px in two layers of the same colour;
+     now 0.
+- Checks (tools/obey/mitre_check.py, psd_verify.py): every colour's separation unchanged outside
+  the key (0 px); doubled ink 0; bare key pixels inside the trap band 122,713 -> 120,959 (fewer);
+  trap lost away from joints only = removed dots; PSD read back with an independent reader:
+  45 layers, 600 ppi, every layer pixel-identical to the fixed masks.
+- Left alone on purpose: a few red pixels in the ART at the cream/red/key point near x2005 y1571
+  (600 ppi) - their trap is legitimate; removing them would change the print.
+- NEXT: Sara looks at the PSD. If approved, the rule goes into the engine behind a tick box
+  ("Mitre key-trap joints", default OFF), applying only with Round traps OFF. Not started.
+  Not done in this pass: carrying A-under-B trap bands on into the key (extend_bands.py, still
+  untested) - Sara's screenshots didn't show it.
+
+## 0a. Handoff 2026-10-19 (Obey) - superseded by 0 above
 
 **Where we stopped (Obey poster, Trap Examples\Obey).** Geometric file, flat colours + key:
 Yellow, Cream, Red, Light Blue, Blue, Dark blue, Key; paper "Cougar Natural 100#C".
