@@ -26,3 +26,9 @@ Pipeline: pdf2psb.py (Photoshop PDF -> raw Layr block) -> bin2psb.py (wrap as PS
 Check: printed (top-most) colour identical to the trapper output at every pixel (0 px differ).
 Delivered to Sara: Trap Examples\Obey\Obey_joint_fix_test.zip (test) and Obey_joint_fix_600.zip (2026-10-19).
 build_obey_original.py: copies the trapper file record-for-record (low memory), swaps the fixed CLEAN__/TRAP__ pixels, drops the white PDF layer, writes .psd at 600 ppi.
+
+Bleed (2026-10-19): bleed.py builds one position map (0.25in = 150 px at 600 ppi) from all visible ink layers:
+straight colour edges are carried outward at their own angle; runs of curvy pattern edges are mirrored (spans start
+and end on a colour edge, and never mirror a neighbouring line); edge lines where paper shows through (Obey bottom:
+4 rows) are rebuilt. add_bleed_psd.py pushes every layer (hidden too) and the flattened preview through the same map.
+Delivered: Trap Examples\Obey\Obey_joint_fix_600_bleed.zip (9900 x 12300 px, 16.5 x 20.5 in @ 600 ppi).
