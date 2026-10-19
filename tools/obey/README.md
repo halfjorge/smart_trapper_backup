@@ -24,4 +24,5 @@ Pipeline: pdf2psb.py (Photoshop PDF -> raw Layr block) -> bin2psb.py (wrap as PS
 -> obey_diff.py (per-layer packed masks a_/b_ + diff report) -> obey_labels.py (labels.npy)
 -> joint_fix.py -> build_obey_psd.py. obey_sheet.py / obey_proto.py make the before/after pictures.
 Check: printed (top-most) colour identical to the trapper output at every pixel (0 px differ).
-Delivered to Sara: Trap Examples\Obey\Obey_joint_fix_test.zip (2026-10-19).
+Delivered to Sara: Trap Examples\Obey\Obey_joint_fix_test.zip (test) and Obey_joint_fix_600.zip (2026-10-19).
+build_obey_original.py: copies the trapper file record-for-record (low memory), swaps the fixed CLEAN__/TRAP__ pixels, drops the white PDF layer, writes .psd at 600 ppi.
