@@ -113,6 +113,24 @@ The trapper could report which type a file is when you run it.
     many px inside any edge of the covering colour that is open (paper or a colour below the source).
     Byrne: 53k trap pixels touched open edges before, 0 after; ~2% of trap pixels removed, none visible.
 
+## Learned 2026-10-19 (Obey - geometric file)
+- **Square traps for geometric art.** Round traps leave rounded caps that poke past corners and
+  shave trap off corners next to open area. Sara prefers Round traps OFF on files like Obey.
+- **Key traps follow visible colour OFF on geometric art.** The nearest-colour split under the key
+  flips back and forth on diagonals (ties go to the first colour) -> scattered single-pixel dots,
+  and at shallow joints it hands one colour's trap to its neighbour.
+- **Joints must be mitred.** Where two colours' edge runs into the key, the boundary between their
+  traps under the key continues the colours' own edge line (straight edges straight, curves along
+  their end direction); no stair-step, dot, notch or bare paper at the joint. Only near the joint
+  (about one trap width); further along each colour keeps its own trap.
+- **Trap bands continue into the key.** Where A traps under B along their shared edge and that
+  edge meets the key, A's band carries on under the key (same angle) to the key trap depth, so the
+  A/B/key corner is covered (examples: light blue outline along blue stems, yellow band along the
+  cream at the key).
+- **No doubled ink.** A pixel must not be in two layers of the same colour (CLEAN + TRAP or two
+  TRAPs): it does not change the separation, but shows as a dark line in Sara's multiply preview
+  and reads as an error.
+
 ## Planned panel tools
 - 'Clean Colors' - BUILT (panel button, 2026-10-06). Optional, before trapping: refills each layer
   with its majority colour (Fill with Preserve Transparency), keeping shape and soft edges. Every

@@ -32,3 +32,9 @@ straight colour edges are carried outward at their own angle; runs of curvy patt
 and end on a colour edge, and never mirror a neighbouring line); edge lines where paper shows through (Obey bottom:
 4 rows) are rebuilt. add_bleed_psd.py pushes every layer (hidden too) and the flattened preview through the same map.
 Delivered: Trap Examples\Obey\Obey_joint_fix_600_bleed.zip (9900 x 12300 px, 16.5 x 20.5 in @ 600 ppi).
+
+2026-10-19 afternoon: joint_fix.py tightened (45 deg entry rule, re-split radius ~1.5 x trap, no
+trap growth via closing), tidy.py (no doubled ink + pin-hole fill under key). DRAFTS, UNTESTED:
+specks.py (stray dots under key), extend_bands.py (carry A-under-B trap bands into the key).
+Next: Sara's own square-trap re-run (300 ppi, trapPx 5, round off, follow-visible off) + a
+joint-mitre pass on top of it. See PROJECT_NOTES.md section 0.

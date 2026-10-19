@@ -3,6 +3,18 @@
 Newest first. Every result here comes from running the real engine on the Trap Examples with
 `tools/example_checks/easy_check.py`.
 
+## 2026-10-19 - Obey (geometric, flat + key), offline joint-fix and bleed what-ifs
+- Source: Trap Examples\Obey\Sepped_GM-SHEP-AUTO TRAP.pdf (trapper output, 600 ppi 9600x12000,
+  trapPx 10, round ON, follow-visible ON) and Sara's partly hand-cleaned _CLEANED.pdf (11 joint spots).
+- Joint fix v1: 59 key joints mitred, rest despeckled; printed top colour identical to the trapper
+  output at every pixel (0 px). Sara found doubled-ink lines and cut-off light blue trap in the
+  flower area -> fixed offline (no doubling, 45 deg rule, re-split radius ~1.5 x trap); after the
+  fix the flower area matches the trapper's own split; pin-hole gaps under the key filled (~200 px).
+  NOT re-delivered.
+- Bleed 0.25 in: every layer through one map; Key and a trap layer checked pixel-exact vs the map.
+- Sara's own re-run 2026-10-19 15:33 (300 ppi, trapPx 5, round OFF, follow-visible OFF): better;
+  remaining hand work = mitred joints at the key. Next test = mitre pass on that run.
+
 ## How to read the tables
 
 **Settings used:** Sara's own. Preflight cleanup on, alpha threshold 89, edge bias 1, key trap

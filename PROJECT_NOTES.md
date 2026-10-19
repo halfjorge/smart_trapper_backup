@@ -14,7 +14,48 @@ out of date.
 
 ---
 
-## 0. NEXT SESSION STARTS HERE (handoff 2026-10-09)
+## 0. NEXT SESSION STARTS HERE (handoff 2026-10-19, Obey)
+
+**Where we stopped (Obey poster, Trap Examples\Obey).** Geometric file, flat colours + key:
+Yellow, Cream, Red, Light Blue, Blue, Dark blue, Key; paper "Cougar Natural 100#C".
+- Sara re-ran the panel herself (status snapshot `UXP_Trapper\status_logs\smart_trapper_status_2026-10-19T19-42-52-582Z.txt`):
+  colours merged, **300 ppi, 4800 x 6000, trapPx 5, Round traps OFF, Key traps follow visible
+  colour OFF**, keyTrapPullbackPx 1, smoothKeyTraps + bevelKeyCorners on. She says this is better
+  than her morning run (600 ppi, trapPx 10, round ON, follow-visible ON).
+- Why round OFF is better on geometric art: round traps grow as a circle, so trap ends get rounded
+  caps that bulge past corners (bumps/blobs at joints), and round also drops trap pixels closer to
+  open area than to their own colour, which shaves corners (trap "stopping short"). Square traps
+  fill corners. Follow-visible OFF removes the nearest-colour split under the key that caused the
+  scattered tie dots and the light blue cut off by the blue.
+- What she still fixes by hand (screenshot of the key frame with red/cream and blue/cream stripes):
+  every joint where a stripe edge runs into the key: the square trap leaves a small stair-step /
+  dot at the joint; she makes a clean mitre (trap line ends on the continuation of the stripe's
+  own edge) and the inside frame corner a crisp square.
+- **NEXT STEP:** Sara will save her new square-trap run (layered, PDF with a white top layer is
+  fine) into `Trap Examples\Obey`. Claude rebuilds the layers from it (PDF -> Layr block -> PSB,
+  tools/obey/pdf2psb.py + bin2psb.py), runs ONE joint-mitre cleanup pass over the whole file on
+  top of the square traps, and sends a 72 dpi preview PSD (full pixel size is fine) for her to
+  check. Nothing goes into her code until she approves (behind a tick box, default off).
+
+**Lessons from today's Obey what-ifs (all offline, none in the engine):**
+- Joint fix v1 (tools/obey/joint_fix.py): re-split the trap zone at joints along the A|B edge line.
+  Problems Sara found in the 600 ppi file: (1) it copied CLEAN pixels into TRAP layers of the same
+  colour -> "doubled ink" lines that show darker in her multiply preview; (2) at shallow/curvy
+  joints (the flower pattern) the line handed long wedges of trap to the wrong colour (light blue
+  trap cut off by the blue). Fixed in the current script: no doubling (tidy.py), line only when the
+  edge enters the key within 45 deg, re-split only within ~1.5 x trap of the joint. Not yet
+  re-delivered to her (her latest files still have the v1 problems).
+- Sara's two hand examples (light blue stems, yellow/cream at the key): where a trap band between
+  two colours (A under B) meets the key, the band should carry straight on under the key to the key
+  trap depth. Draft script tools/obey/extend_bands.py (UNTESTED, never run). Stray-dot cleanup
+  draft tools/obey/specks.py (UNTESTED).
+- Bleed: tools/obey/bleed.py + add_bleed_psd.py add 0.25 in (150 px @600) content-aware bleed to
+  every layer through one position map (straight edges carried at their angle, curvy pattern
+  mirrored). Sara's issues were inside the print area, not the bleed.
+- Delivered so far (Trap Examples\Obey): Obey_joint_fix_test.zip, Obey_joint_fix_600.zip,
+  Obey_joint_fix_600_bleed.zip - all built with joint fix v1 (superseded).
+
+## 0b. Previous handoff (2026-10-09)
 
 **Status**
 - EASY files (all solid Normal layers) are signed off; see section 5 and TEST_RESULTS.md.
