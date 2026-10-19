@@ -62,6 +62,12 @@ for ti,T in enumerate(names):
         Q=np.vstack(pts).astype(float); Q=Q[np.hypot(Q[:,0]-gx,Q[:,1]-gy)<FITR]
         if len(Q)<4: log.append([T,A,B,int(jx),int(jy),'skip-few-points']); continue
         c,dirv,nrm=fitline(Q)
+        # only clearly straight edges get a straight joint: the A|B edge must stay within 1 px of one
+        # straight line for 30 px back from the joint. Curvy pattern joints keep the trapper's split.
+        Q30=np.vstack(pts).astype(float); Q30=Q30[np.hypot(Q30[:,0]-gx,Q30[:,1]-gy)<30]
+        straight=False
+        if len(Q30)>=20:
+            c30,d30,n30=fitline(Q30); straight=float(np.abs((Q30-c30)@n30).max())<=1.0
         TA=get(f'TRAP__{A}_under_{T}',box); TB=get(f'TRAP__{B}_under_{T}',box)
         CA=get(f'CLEAN__{A}',box); CB=get(f'CLEAN__{B}',box)
         dA=ndimage.distance_transform_edt(~SA); dB=ndimage.distance_transform_edt(~SB)
@@ -73,11 +79,23 @@ for ti,T in enumerate(names):
             if 0<=py<K.shape[0] and 0<=px<K.shape[1] and K[py,px]:
                 qx,qy=int(gx+sgn*dirv[0]*trap),int(gy+sgn*dirv[1]*trap)
                 if 0<=qy<K.shape[0] and 0<=qx<K.shape[1]:
-                    ok = bool(K[qy,qx] and dS[qy,qx]>=trap*0.42)
+                    ok = bool(K[qy,qx] and dS[qy,qx]>=trap*0.42) and straight
         yy,xx=np.mgrid[0:y1-y0,0:x1-x0]
-        zone=(np.hypot(xx-gx,yy-gy)<r)&K
+        if ok:
+            # the line must go INTO T fairly squarely (within 45 deg of straight in); a line that only grazes
+            # T's edge would hand a long wedge of the trap zone to one colour
+            dK=ndimage.distance_transform_edt(K)
+            gyy,gxx=np.gradient(ndimage.gaussian_filter(dK,1.5))
+            disk=K&(np.hypot(xx-gx,yy-gy)<=min(6,trap))
+            nv=np.array([gxx[disk].mean(),gyy[disk].mean()]) if disk.any() else np.zeros(2)
+            if np.hypot(*nv)>1e-6:
+                nv=nv/np.hypot(*nv)
+                if abs(float(dirv@nv))<0.707: ok=False
+        # only the joint itself is re-split: about one trap width around it. Further along the edge the
+        # nearest colour keeps its trap (otherwise a slanted line hands neighbouring trap to the wrong colour)
+        zone=(np.hypot(xx-gx,yy-gy)<min(r,1.5*trap+1))&K
         cur=(TA|TB|CA|CB)&zone
-        U=cur|(ndimage.binary_closing(TA|TB|CA|CB,iterations=2)&zone&(dS<=trap))
+        U=cur   # never grow a trap here; pin-holes are closed separately (tidy.py)
         if ok:
             side=(xx-c[0])*nrm[0]+(yy-c[1])*nrm[1]
             sel=SA&(np.hypot(xx-gx,yy-gy)<15)
