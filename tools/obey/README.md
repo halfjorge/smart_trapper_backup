@@ -59,3 +59,11 @@ same angle to the key trap depth; the upper colour still ends on its own edge, s
 key by the band width, as above it. Mitre cutoff lowered from 45 deg to 25 deg (MIN_ANGLE) between the
 colour edge and the key edge. Result: 79 of 88 joints mitred with band carried on; all checks pass.
 Delivered for review: Trap Examples\Obey\Obey_roundtraps_off_MITRED_v2_600.zip (+ Obey_v2_blue_line_compare.png).
+
+## 2026-10-20: bleed on v2 (canvas untouched)
+B2/ = j_<name>.npy links to the v2 visible ink masks + vis_layers.json -> `python3 bleed.py B2 150` (map;
+insets t0 b4 l0 r0) -> `python3 bleed_psd.py v2.psd B2/bleed_map.npz out.psd`: every layer and the flattened
+image go through the map, then the ORIGINAL canvas is pasted back exactly (unlike add_bleed_psd.py, which
+rebuilt the 4 bottom rows). Checks: 0 px different inside the 9600x12000 canvas (all layers, all channels);
+bleed has 0 bare paper, 0 doubled ink. Known: v2 itself has a 4-row paper sliver (1,370 px, x2145-6404) at the
+bottom trim edge, left as-is per Sara. Delivered: Trap Examples\Obey\Obey_roundtraps_off_MITRED_v2_600_bleed.zip
