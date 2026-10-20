@@ -52,3 +52,10 @@ No psd-tools needed (not installable in the cloud workspace):
 7. `python3 psd_write.py new.bin L F out.psd 600` then `python3 psd_verify.py out.psd L F`
 render.py / charmap.py: multiply-preview crops and per-pixel layer maps for checking joints.
 Delivered: Trap Examples\Obey\Obey_roundtraps_off_MITRED_600.zip
+
+## 2026-10-20: v2 "blue line" rule (Sara's choice)
+At a mitred joint the LOWER colour's trap band (TRAP__low_under_up) now carries on under the key at the
+same angle to the key trap depth; the upper colour still ends on its own edge, so they overlap under the
+key by the band width, as above it. Mitre cutoff lowered from 45 deg to 25 deg (MIN_ANGLE) between the
+colour edge and the key edge. Result: 79 of 88 joints mitred with band carried on; all checks pass.
+Delivered for review: Trap Examples\Obey\Obey_roundtraps_off_MITRED_v2_600.zip (+ Obey_v2_blue_line_compare.png).

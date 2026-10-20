@@ -18,6 +18,7 @@ from scipy import ndimage
 LD, OD = sys.argv[1], sys.argv[2]
 W, H = 9600, 12000
 D = 12                 # trap depth under key (measured: chessboard depth 1..12)
+MIN_ANGLE = 25         # degrees between a colour edge and the key edge needed for a mitre
 names = ['Yellow', 'Cream', 'Red', 'Light Blue', 'Blue', 'Dark blue']
 KID = 7
 Ls = json.load(open(f'{LD}/layers.json')); idx = {l['name']: l['index'] for l in Ls}
@@ -85,11 +86,12 @@ for k, (jx, jy, a, b) in enumerate(cents):
     disk = Kb & (np.hypot(xx - gx, yy - gy) <= 6)
     if not disk.any(): log.append([A, B, int(jx), int(jy), 'skip-no-key', 0]); continue
     if mode == 'mitre':
-        # the edge must run INTO the key fairly squarely (within 45 deg of the key's inward direction)
+        # the edge must meet the key edge at >= MIN_ANGLE (25 deg, Sara 2026-10-20; was 45). Below that the
+        # trap end would run more than ~2 trap widths along the key -> gentle cleanup instead.
         dK = ndimage.distance_transform_edt(Kb)
         gyy, gxx = np.gradient(ndimage.gaussian_filter(dK, 1.5))
         nv = np.array([gxx[disk].mean(), gyy[disk].mean()])
-        if np.hypot(*nv) < 1e-6 or abs(float(dirv @ (nv / max(np.hypot(*nv), 1e-9)))) < 0.707:
+        if np.hypot(*nv) < 1e-6 or abs(float(dirv @ (nv / max(np.hypot(*nv), 1e-9)))) < np.sin(np.radians(MIN_ANGLE)):
             mode = 'nearest-shallow'
     TA, TB = TR[A][y0:y1, x0:x1], TR[B][y0:y1, x0:x1]
     CA, CB = CL[A][y0:y1, x0:x1], CL[B][y0:y1, x0:x1]
@@ -120,9 +122,23 @@ for k, (jx, jy, a, b) in enumerate(cents):
     bandA = ndimage.distance_transform_cdt(~SA, metric='chessboard') <= D
     bandB = ndimage.distance_transform_cdt(~SB, metric='chessboard') <= D
     U0 = (TA | TB | CA | CB) & Z
+    S = np.zeros_like(Z); wband = 0.0
     if mode == 'mitre':
         NA = (U0 | (bandA & Z)) & sideA & Z
         NB = (U0 | (bandB & Z)) & ~sideA & Z
+        # "blue line" (Sara 2026-10-20): A is the LOWER colour; where A traps under B (band of A ink inside
+        # B along their edge), A's band carries on under the key at the same angle, to the key trap depth.
+        # B (upper) still ends on its own edge line; under the key they overlap by the band width, as above it.
+        bn = f'TRAP__COLOR__{A}_under_COLOR__{B}'
+        if bn in idx:
+            Pb = np.load(f'{LD}/m_{idx[bn]}.npy', mmap_mode='r')
+            BA = np.unpackbits(np.asarray(Pb[y0*(W//8):y1*(W//8)])).reshape(y1-y0, W)[:, x0:x1].astype(bool)
+            dj = np.hypot(xx - gx, yy - gy)
+            ring = BA & ~ndimage.binary_dilation(Kb, iterations=3) & (dj >= 4) & (dj <= 24) & (side < 0)
+            if ring.sum() >= 10:
+                wband = float(np.percentile(-side[ring], 90))
+                S = Kb & (side < 0) & (side >= -wband - 0.5) & (dAB <= D) & (dj <= 3 * D) & (dABe < dO)
+                NA = NA | S
     else:
         # conservative: keep solid overlap (no trap taken away); remove only slivers/dots (< 5 px wide)
         # of one colour sitting on the other colour's side; fill bare pixels on each colour's own side.
@@ -138,9 +154,11 @@ for k, (jx, jy, a, b) in enumerate(cents):
     TR[A][y0:y1, x0:x1] = nTA; TR[B][y0:y1, x0:x1] = nTB
     CL[A][y0:y1, x0:x1] = nCA; CL[B][y0:y1, x0:x1] = nCB
     zones[y0:y1, x0:x1] |= Z
-    log.append([A, B, int(jx), int(jy), mode, ch])
+    zones[y0:y1, x0:x1] |= S
+    log.append([A, B, int(jx), int(jy), mode, ch, round(wband, 1)])
 from collections import Counter
 print(Counter(l[4] for l in log), 'px changed', sum(l[5] for l in log), flush=True)
+print('band carried into key at', sum(1 for l in log if len(l) > 6 and l[6] > 0), 'joints', flush=True)
 
 # ---------- 2. square corners: fill bare key pixels in exactly one colour's square band ----------
 cov = np.zeros((H, W), bool)
