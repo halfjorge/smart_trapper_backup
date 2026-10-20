@@ -129,6 +129,10 @@ The trapper could report which type a file is when you run it.
   cream at the key).
 - **Inside frame corners crisp and square** (Sara's after screenshot): no bevel on the key trap where
   the key wraps round a colour's corner. Only at real corners, not along curves.
+- **"Blue line" at joints (Sara 2026-10-20, v2 approved):** the LOWER colour's trap band (A under B)
+  carries on under the key at the same angle to the key trap depth; the upper colour ends on its own
+  edge; under the key they overlap by the band width. Mitre only when the colour edge meets the key
+  edge at >= 25 deg.
 - **Shallow joints are different** (edge runs along the key rather than into it, > 45 deg off):
   no mitre line there; keep the overlap, only clear slivers/dots. (Offline pass 2026-10-19 evening.)
 - **No doubled ink.** A pixel must not be in two layers of the same colour (CLEAN + TRAP or two
