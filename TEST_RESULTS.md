@@ -26,6 +26,17 @@ all traps.
   included.
 - **Hand:** Sara's hand-trapped after file, measured the same way.
 
+## 2026-10-20 - Obey v2 (blue line) + bleed (offline)
+| Check | v2 | v2 + bleed (fixed) |
+|---|---|---|
+| Joints mitred / gentle | 79 / 9 | - |
+| Separation changed outside the key | 0 px | - |
+| Doubled ink | 0 | 0 in bleed |
+| Inside-trim pixels changed vs v2 | - | 0 (except 4 bottom rows: 5,465 paper px filled) |
+| Bare paper in bleed | - | 0 |
+| PSD read back | 45 layers, 0 px mismatch | 9900 x 12300, 600 ppi |
+Sara: v2 "looks good"; first bleed had a white bottom line + obvious flower seam -> fixed (bleed_pattern_fix.py).
+
 ## 2026-10-19 evening - Obey square-trap run + joint-mitre pass (offline, NOT in the engine)
 - Source: Trap Examples\Obey\Obey_roundtraps_off.pdf (Sara's panel run: 600 ppi 9600x12000 in the
   PDF, trapPx 5 @300 -> 12 px under key, round OFF, follow-visible OFF). Reference: Sara's before/after

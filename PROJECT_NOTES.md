@@ -14,7 +14,22 @@ out of date.
 
 ---
 
-## 0. NEXT SESSION STARTS HERE (update 2026-10-19 evening, Obey mitre pass delivered)
+## 0. NEXT SESSION STARTS HERE (update 2026-10-20 morning, Obey v2 + bleed)
+
+**Latest Obey files (Trap Examples\Obey), all offline - nothing in the panel/engine yet:**
+- `Obey_roundtraps_off_MITRED_v2_600.zip` - Sara: "looks good". v2 = mitre pass with her "blue line"
+  rule: at a joint the LOWER colour's trap band carries on under the key at the same angle to the key
+  trap depth; the upper colour ends on its own edge (they overlap under the key by the band width).
+  Mitre cutoff 25 deg between colour edge and key edge (was 45). 79 of 88 key joints mitred.
+- `Obey_roundtraps_off_MITRED_v2_600_bleed_fixed.zip` - v2 + 0.25 in bleed (9900 x 12300 @ 600).
+  Inside the trim identical to v2 except the 4 bottom rows (5,465 px of paper sliver filled - Sara
+  asked). Flower texture: pure mirror at the trim; solid shapes (key stroke, yellow band) carried at
+  their own angle; where a mirror would reflect a solid shape, plain blue background is used.
+  Superseded: `..._v2_600_bleed.zip` (white line + obvious pattern seam at the bottom).
+- NEXT: when Sara wants it, put the v2 joint rule into the engine behind a tick box ("Mitre key-trap
+  joints", default OFF, Round traps OFF only). Bleed method also only offline (tools/obey).
+
+## 0-prev. Update 2026-10-19 evening (Obey mitre pass v1 delivered) - superseded by the above
 
 **Waiting for Sara's check:** `Trap Examples\Obey\Obey_roundtraps_off_MITRED_600.zip` (PSD, 9600 x 12000
 @ 600 ppi, same 44 layers as her run minus the PDF's white "Layer 1", plus a HIDDEN magenta layer

@@ -1,12 +1,13 @@
 # Add bleed to a .psd (v1) written by psd_write.py WITHOUT changing anything inside the original canvas.
 # Every layer (hidden ones too) and the flattened image go through the same bleed map (bleed.py); then the
 # original canvas pixels are pasted back exactly, so the separations inside the trim are untouched.
-# Usage: python3 bleed_psd.py in.psd bleed_map.npz out.psd
+# Usage: python3 bleed_psd.py in.psd bleed_map.npz out.psd [--fill-inset]
 import sys, io, struct, numpy as np
 sys.path.insert(0, '/home/claude/smart_trapper_backup/tools/obey')
 from PIL import Image
 from bleed_apply import load_map, apply
 src, mapf, outp = sys.argv[1:4]
+FILL_INSET = '--fill-inset' in sys.argv   # rebuild the paper-sliver edge rows (bleed.py insets) from the bleed
 mp = load_map(mapf); y0i, y1i, x0i, x1i = [int(v) for v in mp['box']]; Bt, Bb, Bl, Br = [int(v) for v in mp['Bs']]
 d = open(src, 'rb').read()
 assert d[:4] == b'8BPS' and struct.unpack('>H', d[4:6])[0] == 1
@@ -31,7 +32,8 @@ def decode(c, w, h):
     return np.frombuffer(c[2:2+w*h], np.uint8).reshape(h, w)
 def grow(full):
     out = apply(full, mp)
-    out[oy:oy+H, ox:ox+W] = full                 # original canvas back, exactly
+    if FILL_INSET: out[Bt:Bt+(y1i-y0i), Bl:Bl+(x1i-x0i)] = full[y0i:y1i, x0i:x1i]   # inset rows come from the bleed
+    else: out[oy:oy+H, ox:ox+W] = full             # original canvas back, exactly
     return out
 
 p = 26; p += 4 + struct.unpack('>I', d[p:p+4])[0]

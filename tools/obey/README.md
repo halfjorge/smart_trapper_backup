@@ -67,3 +67,11 @@ image go through the map, then the ORIGINAL canvas is pasted back exactly (unlik
 rebuilt the 4 bottom rows). Checks: 0 px different inside the 9600x12000 canvas (all layers, all channels);
 bleed has 0 bare paper, 0 doubled ink. Known: v2 itself has a 4-row paper sliver (1,370 px, x2145-6404) at the
 bottom trim edge, left as-is per Sara. Delivered: Trap Examples\Obey\Obey_roundtraps_off_MITRED_v2_600_bleed.zip
+
+## 2026-10-20: bleed fix (white bottom line + pattern seam)
+`python3 bleed_pattern_fix.py B2/bleed_map.npz labels.npy B2/bleed_map_fixed.npz` then
+`python3 bleed_psd.py v2.psd B2/bleed_map_fixed.npz out.psd --fill-inset` and
+`python3 bleed_check.py v2.psd out.psd L 4`. In busy light-blue/blue texture zones (widened over any solid
+shape they touch): solid shapes carried by their own edges only, texture mirrored at the trim, plain blue
+background where a mirror would reflect a solid shape. --fill-inset rebuilds the 4-row paper sliver.
+Delivered: Trap Examples\Obey\Obey_roundtraps_off_MITRED_v2_600_bleed_fixed.zip
