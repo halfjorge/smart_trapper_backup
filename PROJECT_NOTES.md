@@ -14,7 +14,14 @@ out of date.
 
 ---
 
-## 0. NEXT SESSION STARTS HERE (update 2026-10-20 morning, Obey v2 + bleed)
+## 0. NEXT SESSION STARTS HERE (update 2026-10-20 10:15)
+
+**DMB Fall Tour 2026 (Trap Examples\DMB Tour) - content-aware tonal trapping, delivered for Sara's check:**
+`DMB_Fall_tour_2026_trapped.zip` (layered PSD 5400 x 7200 @300: Background, CLEAN__/TRAP__<ink>_under_Key
+per ink, Black/keyline, hidden marker). Method + numbers: tools/dmb_tour/README.md. Test crop approved first.
+Offline only - nothing in the panel/engine.
+
+## 0-obey. Update 2026-10-20 morning, Obey v2 + bleed
 
 **Latest Obey files (Trap Examples\Obey), all offline - nothing in the panel/engine yet:**
 - `Obey_roundtraps_off_MITRED_v2_600.zip` - Sara: "looks good". v2 = mitre pass with her "blue line"

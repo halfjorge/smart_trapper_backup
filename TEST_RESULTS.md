@@ -26,6 +26,17 @@ all traps.
   included.
 - **Hand:** Sara's hand-trapped after file, measured the same way.
 
+## 2026-10-20 - DMB Fall Tour 2026: content-aware trapping of tonal inks (offline)
+Inks carry tone in alpha; trap 5 px @300 under SOLID key line work only (not stipple/specks), tone mirrored from
+the ink edge, lines split mid-way. Test crop approved by Sara, then full poster (tools/dmb_tour):
+| Check | Result |
+|---|---|
+| Trap pixels | 5.46M |
+| Under key < 50% / doubled / two inks per pixel | 0 / 0 / 0 |
+| Key shifted 2 px: white slivers beside inks | 80-92% fewer (3 px: 96%) |
+| Full run vs approved crop | identical |
+| PSD read back | 13 layers, 0 mismatches |
+
 ## 2026-10-20 - Obey v2 (blue line) + bleed (offline)
 | Check | v2 | v2 + bleed (fixed) |
 |---|---|---|
