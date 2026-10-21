@@ -24,6 +24,15 @@ log; any other error still stops the run. No change to print output. Tested with
 (old code reproduces -128, new code completes). Backup: versions\main_backup_2026-10-21_before_empty_layer_fix.js.
 Waiting for Sara to reload the panel and re-run.
 
+**Panel fix 2026-10-21 (trailing space in a layer name):** DMB Nash poster, layer "blue " (trailing space).
+COLOR__ group names are trimmed ("COLOR__blue"), so CLEAN sync looked up "blue": no colour in
+mask_colors.json ("blue "), no clean mask file, original layer not found/hidden -> no CLEAN__blue, original
+blue left showing; 750,838 px of the engine's clean blue (98% under the key) missing = paper "outlines"
+between blue and its key trap. main.js: inkKey()/resolveMaskName() - lookups also match ignoring spaces at
+the start/end of a name; exact names still win first. Tested against Sara's mask_colors.json (7 checks).
+Workaround without the fix: rename the layer without the trailing space.
+Backup: versions\main_backup_2026-10-21_before_trailing_space_fix.js.
+
 ## 0-prev. Update 2026-10-20 10:15
 
 **DMB Fall Tour 2026 (Trap Examples\DMB Tour) - content-aware tonal trapping, delivered for Sara's check:**

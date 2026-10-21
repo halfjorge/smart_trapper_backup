@@ -2072,7 +2072,7 @@ function createController(rootNode) {
     // This preserves the exact alphaThreshold/edgeBias result from the trap engine.
     try {
       if (currentJobFolderEntry) {
-        const cleanFileName = "clean_masks/CLEAN__" + sanitize(sourceName) + ".png";
+        const cleanFileName = "clean_masks/CLEAN__" + sanitize(resolveMaskName(maskColors, sourceName)) + ".png";
         const cleanMaskEntry = await getEntryByRelativePath(currentJobFolderEntry, cleanFileName);
         let cleanMaskLayerId = 0;
         try {
@@ -2360,23 +2360,39 @@ function createController(rootNode) {
       if (isGroupLikeLayer(layer)) {
         const hit = findArtLayerByNameSanitized(layer, safeName);
         if (hit) return hit;
-      } else if (sanitize(layer.name) === safeName) {
+      } else if (sanitize(layer.name) === safeName || inkKey(layer.name) === inkKey(safeName)) {
         return layer;
       }
     }
     return null;
   }
 
-  // Look up a colour in mask_colors.json by exact name, or by file-safe name.
-  function lookupMaskColor(maskColors, name) {
-    if (!maskColors) return null;
-    if (maskColors[name]) return maskColors[name];
-    const safe = sanitize(name);
+  // Name key that ignores file-unsafe characters AND spaces at the start/end of a layer name.
+  // COLOR__ group names are trimmed, so a layer called "blue " (trailing space) must still be found
+  // when looked up as "blue" (Sara, DMB Nash 2026-10-21).
+  function inkKey(name) {
+    return sanitize(String(name === undefined || name === null ? "" : name)).trim();
+  }
+
+  // The engine's own name for an ink (the key in mask_colors.json), e.g. "blue " for "blue".
+  function resolveMaskName(maskColors, name) {
+    if (!maskColors) return name;
+    if (maskColors[name]) return name;
     const keys = Object.keys(maskColors);
     for (let i = 0; i < keys.length; i += 1) {
-      if (keys[i].indexOf("__") !== 0 && sanitize(keys[i]) === safe) return maskColors[keys[i]];
+      if (keys[i].indexOf("__") !== 0 && sanitize(keys[i]) === sanitize(name)) return keys[i];
     }
-    return null;
+    for (let i = 0; i < keys.length; i += 1) {
+      if (keys[i].indexOf("__") !== 0 && inkKey(keys[i]) === inkKey(name)) return keys[i];
+    }
+    return name;
+  }
+
+  // Look up a colour in mask_colors.json by exact name, file-safe name, or trimmed name.
+  function lookupMaskColor(maskColors, name) {
+    if (!maskColors) return null;
+    const key = resolveMaskName(maskColors, name);
+    return maskColors[key] || null;
   }
 
   function buildTopLevelColorFallbackIndex(doc) {
