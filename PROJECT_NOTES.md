@@ -14,7 +14,17 @@ out of date.
 
 ---
 
-## 0. NEXT SESSION STARTS HERE (update 2026-10-20 10:15)
+## 0. NEXT SESSION STARTS HERE (update 2026-10-21)
+
+**Panel fix 2026-10-21 (Manual Progressive Knockout):** Sara's run failed with "Destination clear failed
+... result=-128" on grey green -> coat yello: grey green had been fully cut by the layers above it, so its
+selection was empty and Photoshop cancels a clear with an empty selection (-128). main.js now skips a layer
+with no pixels left (source or destination) and a pair whose selection is empty, with a line in the status
+log; any other error still stops the run. No change to print output. Tested with a stand-in Photoshop
+(old code reproduces -128, new code completes). Backup: versions\main_backup_2026-10-21_before_empty_layer_fix.js.
+Waiting for Sara to reload the panel and re-run.
+
+## 0-prev. Update 2026-10-20 10:15
 
 **DMB Fall Tour 2026 (Trap Examples\DMB Tour) - content-aware tonal trapping, delivered for Sara's check:**
 `DMB_Fall_tour_2026_trapped.zip` (layered PSD 5400 x 7200 @300: Background, CLEAN__/TRAP__<ink>_under_Key

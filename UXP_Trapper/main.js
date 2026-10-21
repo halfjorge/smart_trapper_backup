@@ -1370,6 +1370,29 @@ function createController(rootNode) {
     appendStatus("snapshot hidden: " + ORIGINAL_FLATTENED_LAYER_NAME);
   }
 
+  // True when the layer has no pixels at all (bounds collapse to zero width or height).
+  function layerHasNoPixels(layer) {
+    try {
+      const b = layerBoundsPx(layer);
+      return !(b.right > b.left && b.bottom > b.top);
+    } catch (e) {
+      return false;   // can't tell -> let the normal path run (and report any real error)
+    }
+  }
+
+  // True when the document has no active selection (or it can't be read as non-empty).
+  function selectionIsEmpty() {
+    try {
+      const sel = app.activeDocument && app.activeDocument.selection;
+      const b = sel && sel.bounds;
+      if (!b) return true;
+      const num = (v) => Number(v && typeof v === "object" ? v._value : v) || 0;
+      return !(num(b.right) > num(b.left) && num(b.bottom) > num(b.top));
+    } catch (e) {
+      return false;
+    }
+  }
+
   async function applyProgressiveKnockoutInPhotoshop(doc) {
     const inference = getTopLevelEntriesExcludingSnapshot(doc);
     const layers = inference.entries || [];
@@ -1405,6 +1428,13 @@ function createController(rootNode) {
           const source = knockable[sourceIdx];
           const sourceId = Number(layerIdOf(source && source.layer) || 0);
           if (!sourceId) continue;
+          // A layer can end up with no pixels (e.g. fully knocked out by the layers above it). Its
+          // selection would be empty and Photoshop refuses to clear with an empty selection
+          // (batchPlay error -128). Nothing to cut with -> skip it (2026-10-21).
+          if (layerHasNoPixels(source.layer)) {
+            appendStatus("  skipped (no pixels left to cut with): " + source.meta.name);
+            continue;
+          }
           if (overlayMode && sourceIdx > 0 && isOverlayMeta(source.meta)) {
             appendStatus("  not cutting with overlay: " + source.meta.name + " (" + source.meta.blendMode +
               ", opacity " + source.meta.opacity + "%, fill " + source.meta.fillOpacity + "%)");
@@ -1415,6 +1445,10 @@ function createController(rootNode) {
             const dest = knockable[destIdx];
             const destId = Number(layerIdOf(dest && dest.layer) || 0);
             if (!destId) continue;
+            if (layerHasNoPixels(dest.layer)) {
+              appendStatus("  skipped (no pixels left to cut): " + source.meta.name + " -> " + dest.meta.name);
+              continue;
+            }
 
           const selectResult = await loadSelectionFromLayerTransparencyById(
             sourceId,
@@ -1428,10 +1462,20 @@ function createController(rootNode) {
             );
           }
 
-          const clearResult = await clearSelectionOnLayerById(
-            destId,
-            "Progressive Knockout Clear Underlying Layer"
-          );
+          let clearResult;
+          try {
+            clearResult = await clearSelectionOnLayerById(
+              destId,
+              "Progressive Knockout Clear Underlying Layer"
+            );
+          } catch (clearErr) {
+            // Empty selection (nothing to cut) makes Photoshop cancel the clear (-128): skip, don't fail.
+            if (String(clearErr).indexOf("-128") !== -1 && selectionIsEmpty()) {
+              appendStatus("  skipped (empty selection): " + source.meta.name + " -> " + dest.meta.name);
+              continue;
+            }
+            throw clearErr;
+          }
           if (batchPlayResultHasError(clearResult)) {
             throw new Error(
               "progressive knockout clear failed for " +
