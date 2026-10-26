@@ -2,9 +2,9 @@
 const { chromium } = require('playwright');
 const OUT = process.argv[2] || '/home/claude/work/out';
 const TYPE_VALUES = {
-  standard: { fullDebug: false, preflightCleanup: true, roundTraps: true, closeKeyHalo: false, overlayLayers: false, smoothKeyTraps: false, bevelKeyCorners: false, keyTrapsFollowVisible: false, tonalInks: false, alphaThreshold: 90, edgeBiasPx: 1, keyTrapPullbackPx: 1, colorTrapPullbackPx: 0, trapPx: 5 },
+  standard: { fullDebug: false, preflightCleanup: true, roundTraps: true, closeKeyHalo: false, overlayLayers: false, smoothKeyTraps: true, bevelKeyCorners: true, keyTrapsFollowVisible: true, tonalInks: false, alphaThreshold: 90, edgeBiasPx: 1, keyTrapPullbackPx: 1, colorTrapPullbackPx: 0, trapPx: 5 },
 };
-TYPE_VALUES.geometric = Object.assign({}, TYPE_VALUES.standard, { roundTraps: false, keyTrapsFollowVisible: false, smoothKeyTraps: true, bevelKeyCorners: false });
+TYPE_VALUES.geometric = Object.assign({}, TYPE_VALUES.standard, { roundTraps: false, keyTrapsFollowVisible: false });
 TYPE_VALUES.overlay = Object.assign({}, TYPE_VALUES.standard, { overlayLayers: true });
 TYPE_VALUES.tonal = Object.assign({}, TYPE_VALUES.standard, { tonalInks: true });
 const KEYS = Object.keys(TYPE_VALUES.standard);
@@ -38,7 +38,7 @@ const eq = (a, b) => JSON.stringify(a) === JSON.stringify(b);
   let page = await openPanel(null); let st = await state(page);
   check('fresh install starts on Standard poster', st.sel === 'standard');
   check('fresh install boxes = Standard values', eq(pick(st.settings), TYPE_VALUES.standard));
-  check('note shows the type description, no reset button', /Solid flat colours/.test(st.note) && !st.reset, JSON.stringify(st.note));
+  check('note shows the type description, no reset button', /Illustrated \/ organic/.test(st.note) && !st.reset, JSON.stringify(st.note));
   await page.screenshot({ path: OUT + '/picker_fresh.png', clip: { x: 0, y: 0, width: 380, height: 260 } });
 
   // 2 each type fills the boxes and is remembered
@@ -82,8 +82,12 @@ const eq = (a, b) => JSON.stringify(a) === JSON.stringify(b);
   check('Sara Obey settings: shown as Geometric, values unchanged', st.sel === 'geometric' && eq(pick(st.settings), pick(saraObey)));
   await page.close();
   const sara1009 = Object.assign({}, saraObey, TYPE_VALUES.standard, { alphaThreshold: 89 });
+  const saraMMJ = Object.assign({ bridgeUrl: 'http://127.0.0.1:8765' }, TYPE_VALUES.overlay);
   page = await openPanel(sara1009); st = await state(page);
   check('Sara alpha-89 settings: shown as Custom, values unchanged', st.sel === 'custom' && eq(pick(st.settings), pick(sara1009)));
+  await page.close();
+  page = await openPanel(saraMMJ); st = await state(page);
+  check('Sara MMJ run-2 settings: shown as Overlay / Multiply, values unchanged', st.sel === 'overlay' && eq(pick(st.settings), pick(saraMMJ)));
   await page.close();
   const oldNoTonal = Object.assign({}, saraObey); delete oldNoTonal.tonalInks; delete oldNoTonal.keyTrapsFollowVisible;
   page = await openPanel(oldNoTonal); st = await state(page);

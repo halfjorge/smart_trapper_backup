@@ -26,6 +26,12 @@ all traps.
   included.
 - **Hand:** Sara's hand-trapped after file, measured the same way.
 
+## 2026-10-26 - Agreed preset values in the picker (panel only)
+file_type_test.js updated to the agreed values: 28 checks PASS on Sara's copy and the co-worker's copy
+(new check: Sara's MMJ run-2 settings open as "Overlay / Multiply layers", values unchanged). job.json
+from each type == the same boxes ticked by hand. Run Trapper suite (18 situations + individual buttons):
+same results as before on both copies.
+
 ## 2026-10-26 - "What kind of file is this?" picker (panel only, stand-in Photoshop)
 Tool: `tools/ui_tests/file_type_test.js` (after run_trapper_button_test.js). 27 checks, all PASS, on
 Sara's copy and on the co-worker's copy:

@@ -30,7 +30,9 @@ poster, Geometric / flat shapes, Overlay / Multiply layers, Tonal / grayscale. O
 2b. DRAFT 2026-10-26: user guide PDF with pictures for every setting, `docs/user_guide/` (README there).
    Pictures = REAL engine on small test drawings, setting off vs on (Sara: "can you generate them?
    I don't want to run the trapper over and over"). Waiting for Sara's review; Mac install page is a
-   placeholder until the package exists. To go in the install package.
+   placeholder until the package exists. To go in the install package. PAUSED 2026-10-26 15:09 (Sara: stop
+   on the visual examples / pdf for now). The PDF in docs/user_guide still shows the OLD preset values -
+   out of date; rebuild with the installed values before it goes anywhere.
 3. Mac install for the co-worker (Sara 2026-10-26: co-worker has the Claude desktop app on this account,
    so this chat can be linked to the Mac to test the install there; NO paid Apple developer account ->
    one-time System Settings > Privacy & Security > "Open Anyway"; Sara will put the installer on the
@@ -77,15 +79,22 @@ they behave as before). Print output identical to clicking the four by hand.
 the existing settings; every box stays adjustable ("ADJUSTED from <type>" note lists the changes, "Put
 back <type> settings" button). `fileType` is saved with the settings but NOT sent to the engine
 (job.json built field by field; tested identical to ticking the boxes by hand).
+**INSTALLED VALUES (Sara 2026-10-26 15:10 = the "DEFAULT SETTINGS / PRESETS" block below, bevel ON for
+Geometric):**
 | Type | Values (all others off) |
 |---|---|
-| Standard poster | trap 5, Preflight cleanup ON, alpha 90, edge bias 1, key pullback 1, colour pullback 0, Round ON |
-| Geometric / flat shapes | Standard but Round OFF, Key traps follow visible OFF, Smooth ON, **Bevel OFF** |
-| Overlay / Multiply layers | Standard + File has transparent / overlay layers |
-| Tonal / grayscale | Standard + Tonal inks |
+| Standard poster (illustrated / organic) | trap 5, Preflight cleanup ON, alpha 90, edge bias 1, key pullback 1, colour pullback 0, Round ON, Key traps follow visible ON, Smooth ON, Bevel ON (= Sara's MMJ_OBH27 run 2 without the overlay box) |
+| Geometric / flat shapes | Standard but Round OFF, Key traps follow visible OFF (Smooth ON, Bevel ON) |
+| Overlay / Multiply layers | Standard + File has transparent / overlay layers (= MMJ run 2 exactly) |
+| Tonal / grayscale | Standard + Tonal inks (other boxes not used by the engine in tonal mode) |
 | Custom | changes nothing |
-- Geometric Bevel OFF (Sara 2026-10-26): on the approved Obey file the mitre pass filled back the 561 px /
-  134 square corners that Bevel had cut; Sara wants inside corners square.
+- History: 14:40 Geometric had Bevel OFF (Obey corners); Sara then chose Bevel ON (15:10) after agreeing
+  the presets in another session. Claude's note: on Obey the approved file had 134 bevelled corners squared
+  back by hand - if geometric corners come out bevelled, untick Bevel.
+- Caution: the new Standard rests on one poster (MMJ). The easy-file sign-off (TEST_RESULTS) was with
+  smooth/bevel/follow-visible OFF. They only change traps under the key (nothing visible in register);
+  known side effect of follow-visible = scattered single dots on diagonals (why Geometric has it off).
+  Re-checking the Trap Examples with the new Standard is offered (needs the Trap Examples folder).
 - Fresh install (no saved settings) starts on Standard poster - this is the co-worker's default. Saved
   settings are never replaced: the picker shows the type they match, else Custom (Sara at alpha 89 = Custom).
   DEFAULTS itself is unchanged (only used for empty boxes / very old saved settings).

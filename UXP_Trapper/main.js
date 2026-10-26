@@ -41,18 +41,19 @@ const DEFAULTS = {
 // they match, or Custom. The type itself is NOT sent to the engine (job.json lists each setting).
 const FILE_TYPE_BASE = {
   fullDebug: false, preflightCleanup: true, roundTraps: true, closeKeyHalo: false, overlayLayers: false,
-  smoothKeyTraps: false, bevelKeyCorners: false, keyTrapsFollowVisible: false, tonalInks: false,
+  smoothKeyTraps: true, bevelKeyCorners: true, keyTrapsFollowVisible: true, tonalInks: false,
   alphaThreshold: 90, edgeBiasPx: 1, keyTrapPullbackPx: 1, colorTrapPullbackPx: 0, trapPx: 5
 };
+// Values agreed with Sara 2026-10-26 (PROJECT_NOTES "DEFAULT SETTINGS / PRESETS", from her MMJ_OBH27 run 2).
 const FILE_TYPES = [
   { id: "standard", label: "Standard poster",
-    help: "Solid flat colours with key line work - most posters.",
+    help: "Illustrated / organic art with key line work - most posters. Round traps, follow the colour you see, smooth and bevel on.",
     values: Object.assign({}, FILE_TYPE_BASE) },
   { id: "geometric", label: "Geometric / flat shapes",
-    help: "Hard-edged shapes, straight lines and corners (e.g. Obey). Square traps, smooth on, bevel off (keeps inside corners square).",
-    values: Object.assign({}, FILE_TYPE_BASE, { roundTraps: false, keyTrapsFollowVisible: false, smoothKeyTraps: true, bevelKeyCorners: false }) },
+    help: "Hard-edged shapes, straight lines and corners (e.g. Obey). Square traps, follow-visible off; smooth and bevel on.",
+    values: Object.assign({}, FILE_TYPE_BASE, { roundTraps: false, keyTrapsFollowVisible: false }) },
   { id: "overlay", label: "Overlay / Multiply layers",
-    help: "Has Multiply / Darken layers or layers under 100% opacity. Colours under them are kept.",
+    help: "Standard poster settings plus overlay layers: for files with Multiply / Darken layers or layers under 100% opacity. Colours under them are kept.",
     values: Object.assign({}, FILE_TYPE_BASE, { overlayLayers: true }) },
   { id: "tonal", label: "Tonal / grayscale",
     help: "Every colour is a grayscale / textured layer (e.g. DMB Fall Tour). No knockout; traps only under solid key lines.",
