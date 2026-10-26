@@ -14,7 +14,51 @@ out of date.
 
 ---
 
-## 0. NEXT SESSION STARTS HERE (update 2026-10-26)
+## 0. NEXT SESSION STARTS HERE (handoff 2026-10-26: UI / workflow, so someone else can use it)
+
+**Sara's goal now:** make the panel easy for ANOTHER person to use efficiently, without Sara's knowledge
+of building and testing it. The backend (engine + trap rules) is in a good place; the work is UI and workflow.
+Talk it through with Sara first and agree a plan before changing the panel.
+
+**What exists today (all on branch trapper_2026_10, live copy = Sara's Desktop\trapper):**
+- Panel `UXP_Trapper/main.js` (UXP, loaded in UXP Developer Tool; panel change = Reload). Sections:
+  Run Settings / Actions / Status.
+  - Action buttons in use, in Sara's order: Clean Colors -> Manual Progressive Knockout -> (Cut Top Key From
+    Colors) -> Run Trapper -> Prepare Import Structure -> Import Traps; Save Status Snapshot for debugging
+    (writes UXP_Trapper\status_logs). Plus small/unlabelled buttons: refresh document, edit bridge URL,
+    pick/clear job folder, pick/clear log folder, test bridge, save settings, export masks, import plan,
+    create job, export config, "? Explain settings".
+  - Settings: 9 tick boxes (fullDebug, preflightCleanup, roundTraps, closeKeyHalo, overlayLayers,
+    smoothKeyTraps, bevelKeyCorners, keyTrapsFollowVisible, tonalInks) + 5 fields (alphaThreshold 90,
+    edgeBiasPx 0, keyTrapPullbackPx 1, colorTrapPullbackPx 0, trapPx 5).
+- Bridge `UXP_Trapper/real_bridge.py` (local service at http://127.0.0.1:8765) runs the engine.
+- Engine `SmartTrapperB1/engine` (Rust; engine change = BUILD_AND_TEST_ENGINE.bat, then Reload).
+  Cloud builds: vendored kit tools/dev/engine_build_kit_cloud.zip (crates.io blocked), see section 9/10.
+- Sharing bits already in the repo: SmartTrapper_Share folder, SHARE_README_WINDOWS_MAC.txt,
+  build_smart_trapper_bundle.py (not reviewed this session - check what they do before reusing).
+
+**What a new user trips over (seen in this session):**
+- Many steps whose ORDER matters; two knockout buttons can fail or remove art (the key must NOT cut inks
+  on tonal files - now guarded when Tonal inks is on).
+- Settings depend on the kind of file - a new user won't know them:
+  geometric / flat (Obey): Round traps OFF, Key traps follow visible OFF, trap 5 @300;
+  tonal / grayscale layers (DMB Tour): Tonal inks ON;
+  overlay / multiply layers: File has overlay layers ON. -> good candidate for PRESETS.
+- File problems the panel only finds by failing: a layer name with a trailing space (fixed 2026-10-21),
+  a layer emptied by knockout (fixed 2026-10-21). -> good candidate for a PREFLIGHT CHECK with plain warnings.
+- Setup needs UXP Developer Tool, the bridge running, and an engine build.
+- Labels and help text are technical and long.
+
+**Ideas to discuss with Sara (nothing built yet):** a short "what kind of file is this?" preset picker;
+one guided "Run" that does the steps in order with checks between them; preflight warnings (names,
+empty/hidden layers, which layer is key/paper, tonal-file detection); plain-language labels with
+advanced settings tucked away; a one-page user guide; an install/share package.
+
+**Offline tools from this session (not in the app):** tools/obey (joint mitre, bleed, PSD read/write),
+tools/dmb_tour (tonal trapping prototype + PSD writer), tools/obey/layr_read_full.py (reads PSD/PSB layer
+data from Photoshop PDFs). Delivered client files are listed in sections 0-prev*.
+
+## 0-prev3. Update 2026-10-26 (Tonal inks added)
 
 **NEW in the app: "Tonal inks (grayscale layers)" tick box, default OFF (Sara OK'd 2026-10-26).**
 The DMB Fall Tour content-aware trapping is now in the engine (SmartTrapperB1/engine/src/tonal.rs, job.json
