@@ -45,7 +45,7 @@ const FILE_TYPE_BASE = {
   alphaThreshold: 90, edgeBiasPx: 1, keyTrapPullbackPx: 1, colorTrapPullbackPx: 0, trapPx: 5
 };
 // Values agreed with Sara 2026-10-26 (PROJECT_NOTES "DEFAULT SETTINGS / PRESETS", from her MMJ_OBH27 run 2).
-const FILE_TYPES = [
+const BUILTIN_FILE_TYPES = [
   { id: "standard", label: "Standard poster",
     help: "Illustrated / organic art with key line work - most posters. Round traps, follow the colour you see, smooth and bevel on.",
     values: Object.assign({}, FILE_TYPE_BASE) },
@@ -59,6 +59,68 @@ const FILE_TYPES = [
     help: "Every colour is a grayscale / textured layer (e.g. DMB Fall Tour). No knockout; traps only under solid key lines.",
     values: Object.assign({}, FILE_TYPE_BASE, { tonalInks: true }) }
 ];
+let FILE_TYPES = BUILTIN_FILE_TYPES;   // replaced by the shared folder's presets.json when it can be read
+
+// ---- Shared Dropbox folder "SmartTrapper Shared" (2026-10-26) ----
+// presets.json there is the team's single source of truth for the file types (Sara edits it; the panel only
+// reads it). Anything missing or wrong -> the built-in presets above, with a note in the status; never fails.
+const PRESET_NUMBER_RANGES = { alphaThreshold: [0, 255], edgeBiasPx: [-20, 20], keyTrapPullbackPx: [0, 50], colorTrapPullbackPx: [0, 50], trapPx: [1, 50] };
+function presetTypeId(raw) {
+  const t = String(raw || "").toLowerCase();
+  if (!t) return "";
+  if (/illustrat|organic|standard|poster|default/.test(t)) return "standard";
+  if (/geometr|hard|flat/.test(t)) return "geometric";
+  if (/tonal|gr[ae]y|textur/.test(t)) return "tonal";
+  if (/overlay|multiply|transparen/.test(t)) return "overlay";
+  return t.replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "");
+}
+// Only known settings with sensible values are taken; job.json-style names are understood too.
+function cleanPresetSettings(src, notes, where) {
+  const out = {};
+  if (!src || typeof src !== "object") return out;
+  const alias = { overlayMode: "overlayLayers", round: "roundTraps", tolerance: "trapPx" };
+  Object.keys(src).forEach((k0) => {
+    let k = alias[k0] || k0, v = src[k0];
+    if (k0 === "trapShape") { k = "roundTraps"; v = String(v).toLowerCase() === "round"; }
+    if (k0 === "closeKeyHaloPx") { k = "closeKeyHalo"; v = Number(v) > 0; }
+    if (!(k in FILE_TYPE_BASE)) return;
+    if (typeof FILE_TYPE_BASE[k] === "boolean") {
+      if (typeof v === "boolean") out[k] = v; else notes.push(where + ": " + k0 + " should be true/false - ignored");
+    } else {
+      const n = Number(v), r = PRESET_NUMBER_RANGES[k] || [-1e9, 1e9];
+      if (v !== "" && v !== null && Number.isFinite(n) && n >= r[0] && n <= r[1]) out[k] = n;
+      else notes.push(where + ": " + k0 + " = " + JSON.stringify(v) + " is not a usable number - ignored");
+    }
+  });
+  return out;
+}
+// presets.json -> file types. Accepts "types" (or "presets"/"fileTypes") as a list or an object keyed by id,
+// each with "settings" (or "values") and optional "label"/"help"; "always" (or "alwaysOn"/"defaults") applies to all.
+function presetsFromSharedJson(obj) {
+  if (!obj || typeof obj !== "object" || Array.isArray(obj)) throw new Error("presets.json is not a JSON object");
+  const notes = [];
+  const always = cleanPresetSettings(obj.always || obj.alwaysOn || obj.defaults || {}, notes, "always");
+  let list = obj.types || obj.presets || obj.fileTypes;
+  if (!list || typeof list !== "object") throw new Error('presets.json has no "types"');
+  if (!Array.isArray(list)) list = Object.keys(list).map((k) => Object.assign({ id: k }, list[k]));
+  const types = [];
+  list.forEach((t, i) => {
+    if (!t || typeof t !== "object") return;
+    const id = presetTypeId(t.id || t.name || t.label);
+    if (!id || types.some((x) => x.id === id)) return;
+    const builtin = BUILTIN_FILE_TYPES.find((b) => b.id === id);
+    const values = Object.assign({}, FILE_TYPE_BASE, always, cleanPresetSettings(t.settings || t.values || {}, notes, String(t.label || id)));
+    types.push({ id, label: String(t.label || (builtin && builtin.label) || id), help: String(t.help || t.description || (builtin && builtin.help) || ""), values });
+  });
+  const std = types.find((t) => t.id === "standard");
+  if (!std) throw new Error('presets.json has no Standard / Illustrated type');
+  if (!types.some((t) => t.id === "overlay")) {   // overlay = Standard + overlay layers (the "always" rule)
+    const b = BUILTIN_FILE_TYPES.find((x) => x.id === "overlay");
+    types.splice(types.indexOf(std) + 1, 0, { id: "overlay", label: b.label, help: b.help, values: Object.assign({}, std.values, { overlayLayers: true }) });
+  }
+  return { types, notes, updated: String(obj.updated || obj.date || ""), updatedBy: String(obj.updatedBy || obj.by || "") };
+}
+
 const FILE_TYPE_SETTING_NAMES = {
   fullDebug: "Full debug logging", preflightCleanup: "Preflight cleanup", roundTraps: "Round traps",
   closeKeyHalo: "Close key halo", overlayLayers: "Overlay layers", smoothKeyTraps: "Smooth traps under the key",
@@ -209,6 +271,14 @@ function panelMarkup() {
       </div>
 
       <div class="panel">
+        <div class="section-title">Setup</div>
+        <div class="field-label">Shared folder (Dropbox: "SmartTrapper Shared")</div>
+        <div id="sharedFolderDisplay" style="font-size:11px; word-break:break-all; margin-bottom:2px;">(not set)</div>
+        <div id="sharedFolderNote" style="font-size:11px; opacity:0.85; white-space:pre-line; line-height:1.35; margin-bottom:6px;"></div>
+        <button id="pickSharedFolderBtn" class="button secondary full" title="Pick the Dropbox folder 'SmartTrapper Shared' once. The panel remembers it.">Shared folder...</button>
+      </div>
+
+      <div class="panel">
         <div class="section-title">Status</div>
         <button id="saveStatusBtn" class="button secondary">Save Status Snapshot</button>
         <div id="runProgressShell" style="margin-top:10px;">
@@ -265,6 +335,9 @@ function createController(rootNode) {
       "fileType",
       "fileTypeNote",
       "fileTypeResetBtn",
+      "sharedFolderDisplay",
+      "sharedFolderNote",
+      "pickSharedFolderBtn",
       "fullDebug",
       "preflightCleanup",
       "roundTraps",
@@ -396,6 +469,8 @@ function createController(rootNode) {
     };
     return {
       fileType: els.fileType ? String(els.fileType.value || "custom") : "custom",
+      sharedFolderToken: sharedFolderToken,
+      sharedFolderPath: sharedFolderPath,
       fullDebug: !!els.fullDebug.checked,
       preflightCleanup: !!els.preflightCleanup.checked,
       roundTraps: !!els.roundTraps.checked,
@@ -418,6 +493,8 @@ function createController(rootNode) {
 
   function applySettings(settings) {
     const s = Object.assign({}, DEFAULTS, settings || {});
+    if (settings && typeof settings.sharedFolderToken === "string") sharedFolderToken = settings.sharedFolderToken;
+    if (settings && typeof settings.sharedFolderPath === "string") sharedFolderPath = settings.sharedFolderPath;
     els.fullDebug.checked = !!s.fullDebug;
     els.preflightCleanup.checked = !!s.preflightCleanup;
     els.roundTraps.checked = !!s.roundTraps;
@@ -487,6 +564,8 @@ function createController(rootNode) {
   function loadSettings() {
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
+      freshInstall = !raw;
+      try { savedFileTypeId = raw ? String((JSON.parse(raw) || {}).fileType || "") : "standard"; } catch (e) { savedFileTypeId = ""; }
       // Fresh install: start on the Standard poster type (2026-10-26). Saved settings are never replaced.
       if (!raw) return applySettings(Object.assign({}, DEFAULTS, fileTypeById("standard").values, { fileType: "standard" }));
       const parsed = JSON.parse(raw) || {};
@@ -593,6 +672,90 @@ function createController(rootNode) {
     const s = getSettings();
     currentJobFolderEntry = await tryBindFolderEntryFromPath(s.jobFolder);
     currentLogFolderEntry = await tryBindFolderEntryFromPath(s.logFolder);
+  }
+
+  // ---- Shared folder (Dropbox "SmartTrapper Shared") ----
+  let sharedFolderToken = "";       // persistent permission token (survives restarts)
+  let sharedFolderPath = "";
+  let sharedFolderEntry = null;
+  let presetSource = "built-in presets";
+  let freshInstall = false;
+  let savedFileTypeId = "";
+
+  function setSharedNote(text) {
+    if (els.sharedFolderNote) els.sharedFolderNote.textContent = text;
+    if (els.sharedFolderDisplay) els.sharedFolderDisplay.textContent = sharedFolderPath || "(not set)";
+  }
+
+  function rebuildFileTypeOptions() {
+    if (!els.fileType) return;
+    const keep = els.fileType.value;
+    els.fileType.innerHTML = FILE_TYPES.map((t) => '<option value="' + t.id + '">' + t.label + "</option>").join("") +
+      '<option value="custom">Custom (my own settings)</option>';
+    const want = fileTypeById(savedFileTypeId) ? savedFileTypeId : (fileTypeById(keep) ? keep : matchingFileTypeId(getSettings()));
+    els.fileType.value = want;
+    try { refreshFileTypeNote(); } catch (e) {}
+  }
+
+  // Reads presets.json from the shared folder. Never throws: anything wrong -> built-in presets + a note.
+  async function loadSharedFolder() {
+    sharedFolderEntry = null;
+    let why = "";
+    if (!sharedFolderToken) {
+      why = "Shared folder not set - using the built-in presets.";
+    } else {
+      try { sharedFolderEntry = await localFileSystem.getEntryForPersistentToken(sharedFolderToken); } catch (e) { sharedFolderEntry = null; }
+      if (!sharedFolderEntry) why = "Shared folder not reachable (Dropbox offline, moved, or needs picking again) - using the built-in presets.";
+    }
+    let loaded = null;
+    if (sharedFolderEntry) {
+      try {
+        const f = await sharedFolderEntry.getEntry("presets.json");
+        loaded = presetsFromSharedJson(JSON.parse(await f.read()));
+      } catch (e) {
+        const msg = String(e && e.message || e);
+        why = /not found|could not find|no such|enoent|does not exist|NotFound/i.test(msg)
+          ? "presets.json is not in the shared folder yet - using the built-in presets."
+          : "presets.json could not be used (" + msg + ") - using the built-in presets.";
+        loaded = null;
+      }
+    }
+    if (loaded) {
+      FILE_TYPES = loaded.types;
+      presetSource = "shared presets.json" + (loaded.updated ? (" (updated " + loaded.updated + (loaded.updatedBy ? " by " + loaded.updatedBy : "") + ")") : "");
+      setSharedNote("Presets: from the shared folder" + (loaded.updated ? (", updated " + loaded.updated + (loaded.updatedBy ? " by " + loaded.updatedBy : "")) : "") + "." +
+        (loaded.notes.length ? ("\nIgnored in presets.json:\n- " + loaded.notes.join("\n- ")) : ""));
+    } else {
+      FILE_TYPES = BUILTIN_FILE_TYPES;
+      presetSource = "built-in presets";
+      setSharedNote(why);
+    }
+    rebuildFileTypeOptions();
+    if (loaded && freshInstall) {      // a brand-new install starts on the TEAM's Standard values
+      const std = fileTypeById("standard");
+      if (std) applySettings(Object.assign({}, getSettings(), std.values, { fileType: "standard" }));
+      persistSettingsSilently();
+    }
+    try { appendStatus("Presets: " + (loaded ? presetSource : why)); } catch (e) {}
+    return !!loaded;
+  }
+
+  async function pickSharedFolder() {
+    let folder = null;
+    try { folder = await localFileSystem.getFolder(); } catch (e) { folder = null; }
+    if (!folder) { appendStatus("Shared folder: nothing picked."); return; }
+    try {
+      sharedFolderToken = await localFileSystem.createPersistentToken(folder);
+      sharedFolderPath = folder.nativePath || folder.name || "(picked)";
+    } catch (e) {
+      appendStatus("Shared folder could not be remembered: " + String(e));
+      return;
+    }
+    if (!/smarttrapper shared/i.test(sharedFolderPath)) appendStatus("Note: the picked folder isn't called \"SmartTrapper Shared\" - check it's the right one.");
+    savedFileTypeId = els.fileType ? els.fileType.value : savedFileTypeId;
+    freshInstall = false;
+    persistSettingsSilently();
+    await loadSharedFolder();
   }
 
   // Another computer (the co-worker's Mac, 2026-10-26): the default folders point at Sara's Windows
@@ -4572,7 +4735,7 @@ function createController(rootNode) {
 
     try {
       appendStatus(statusStamp("Run Trapper (all steps)"));
-      try { appendStatus("File type: " + fileTypeSummary(getSettings())); } catch (e) {}
+      try { appendStatus("File type: " + fileTypeSummary(getSettings()) + " | Presets: " + presetSource); } catch (e) {}
       runProgressStepPrefix = "Checking";
       setRunProgress(0, "file");
 
@@ -4814,6 +4977,7 @@ function createController(rootNode) {
     bindActionWithCompletionAlert(els.cleanColorsBtn, "Clean Colors", runCleanColors);
     bindActionWithCompletionAlert(els.runBtn, "Run Trapper", runTrapper);
     bindClick(els.runAllBtn, runAllSteps);
+    bindClick(els.pickSharedFolderBtn, pickSharedFolder);
   }
 
   async function init() {
@@ -4829,6 +4993,7 @@ function createController(rootNode) {
     // Photoshop (and steals the cursor) mid-edit.
     setInterval(() => { if (editingNumberBox) return; try { updateFileCheckBanner(); } catch (e) {} }, 2000);
     setStatus("Ready.\n\nThis panel is the UXP foundation for the trapper rewrite.");
+    try { await loadSharedFolder(); } catch (e) { FILE_TYPES = BUILTIN_FILE_TYPES; }
     resetRunProgress("Idle");
   }
 

@@ -15,5 +15,9 @@ SMART TRAPPER - installing on this Mac
 
 4. Quit and reopen Photoshop. The panel is under Plugins > Smart Trapper UXP > Smart Trapper.
 
+5. One time, in the panel: Setup > "Shared folder..." and pick the Dropbox folder "SmartTrapper Shared"
+   (the installer tells you where it is). If the Mac asks whether Photoshop may use Dropbox files,
+   click Allow. The panel works without it too (it then uses its built-in settings).
+
 The guide (Smart_Trapper_Guide.pdf) is copied to your Home folder > SmartTrapper.
 Problems: take a screenshot and send it to Sara.

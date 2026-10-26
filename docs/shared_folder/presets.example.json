@@ -1,0 +1,42 @@
+{
+  "schema": "smart-trapper-presets/1",
+  "updated": "2026-10-26",
+  "updatedBy": "Sara",
+  "always": {
+    "preflightCleanup": true,
+    "alphaThreshold": 90,
+    "edgeBiasPx": 1,
+    "keyTrapPullbackPx": 1,
+    "colorTrapPullbackPx": 0,
+    "trapPx": 5,
+    "closeKeyHalo": false,
+    "tonalInks": false,
+    "overlayLayers": false
+  },
+  "types": [
+    {
+      "id": "standard",
+      "label": "Standard poster",
+      "help": "Illustrated / organic art with key line work - most posters.",
+      "settings": { "roundTraps": true, "keyTrapsFollowVisible": true, "smoothKeyTraps": true, "bevelKeyCorners": true }
+    },
+    {
+      "id": "geometric",
+      "label": "Geometric / flat shapes",
+      "help": "Hard-edged shapes, straight lines and corners (e.g. Obey).",
+      "settings": { "roundTraps": false, "keyTrapsFollowVisible": false, "smoothKeyTraps": true, "bevelKeyCorners": true }
+    },
+    {
+      "id": "overlay",
+      "label": "Overlay / Multiply layers",
+      "help": "Standard poster settings plus overlay layers (Multiply / Darken, or under 100% opacity).",
+      "settings": { "roundTraps": true, "keyTrapsFollowVisible": true, "smoothKeyTraps": true, "bevelKeyCorners": true, "overlayLayers": true }
+    },
+    {
+      "id": "tonal",
+      "label": "Tonal / grayscale",
+      "help": "Every colour is a grayscale / textured layer (e.g. DMB Fall Tour).",
+      "settings": { "tonalInks": true, "roundTraps": true, "keyTrapsFollowVisible": true, "smoothKeyTraps": true, "bevelKeyCorners": true }
+    }
+  ]
+}

@@ -78,10 +78,26 @@ else
   open "$PAYLOAD/SmartTrapper.ccx"
 fi
 
+# Shared Dropbox folder (team presets): find it so we can say exactly which folder to pick in the panel.
+SHARED=""
+for root in "$HOME/Library/CloudStorage" "$HOME"; do
+  [ -d "$root" ] || continue
+  SHARED="$(find "$root" -maxdepth 6 -type d -name "SmartTrapper Shared" -path "*Dropbox*" 2>/dev/null | head -1)"
+  [ -n "$SHARED" ] && break
+done
+if [ -n "$SHARED" ]; then
+  echo "     Shared Dropbox folder found: $SHARED"
+  echo "$(date) shared folder: $SHARED" >> "$LOG"
+  SHARED_MSG="In the panel, open Setup > Shared folder... and pick:\n$SHARED"
+else
+  echo "     Shared Dropbox folder \"SmartTrapper Shared\" not found yet (Dropbox not set up?). The panel works without it."
+  SHARED_MSG="Later: when Dropbox is set up, open Setup > Shared folder... in the panel and pick the \"SmartTrapper Shared\" folder."
+fi
+
 say "5 of 5  Done."
 echo ""
 echo "  Quit and reopen Photoshop, then open: Plugins > Smart Trapper UXP > Smart Trapper"
 [ -f "$HOME/SmartTrapper/Smart_Trapper_Guide.pdf" ] && echo "  The guide is in your Home folder > SmartTrapper > Smart_Trapper_Guide.pdf"
 echo ""
-[ -z "${SMART_TRAPPER_CI:-}" ] && osascript -e 'display dialog "Smart Trapper is installed.\n\nQuit and reopen Photoshop, then open:\nPlugins > Smart Trapper UXP > Smart Trapper" buttons {"OK"} default button "OK" with title "Smart Trapper"' >/dev/null 2>&1
+[ -z "${SMART_TRAPPER_CI:-}" ] && osascript -e "display dialog \"Smart Trapper is installed.\n\nQuit and reopen Photoshop, then open:\nPlugins > Smart Trapper UXP > Smart Trapper\n\n$SHARED_MSG\" buttons {\"OK\"} default button \"OK\" with title \"Smart Trapper\"" >/dev/null 2>&1
 exit 0

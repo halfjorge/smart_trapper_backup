@@ -35,7 +35,11 @@ function __folderEntry(p) { return { isFile: false, isFolder: true, name: p.spli
   getEntry: async (n) => { const q = p + '/' + n; const s = await window.__fsStat(q); if (!s.exists) throw new Error('not found ' + q); return s.isFolder ? __folderEntry(q) : __fileEntry(q); },
   createFolder: async (n) => { const q = p + '/' + n; await window.__mkdir(q); return __folderEntry(q); } }; }
 const __lfs = { getEntryWithUrl: async (u) => { const p = String(u).replace(/^file:/, ''); const s = await window.__fsStat(p);
-  if (!s.exists) throw new Error('no ' + p); return s.isFolder ? __folderEntry(p) : __fileEntry(p); } };
+  if (!s.exists) throw new Error('no ' + p); return s.isFolder ? __folderEntry(p) : __fileEntry(p); },
+  getFolder: async () => (window.__pickFolder ? __folderEntry(window.__pickFolder) : null),
+  createPersistentToken: async (e) => 'tok:' + e.nativePath,
+  getEntryForPersistentToken: async (t) => { const p = String(t).replace(/^tok:/, ''); const s = await window.__fsStat(p);
+    if (!s.exists || !s.isFolder) throw new Error('Token is not valid'); return __folderEntry(p); } };
 window.__app = { activeDocument: null, showAlert: async (m) => { window.__alerts.push(String(m)); } };
 window.require = (m) => {
   if (m === 'uxp') return { entrypoints: { setup: (cfg) => { window.__uxpCfg = cfg; } }, storage: { localFileSystem: __lfs, formats: {} } };
