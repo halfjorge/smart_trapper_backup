@@ -86,6 +86,8 @@ function panelMarkup() {
             <input id="bevelKeyCorners" type="checkbox">
             <span class="check-text" data-for="bevelKeyCorners" style="color:#f2f2f2; opacity:1;">Bevel trap corners next to paper</span>
           </div>
+          <div class="field-help">Where a trap under the key runs up to bare paper beside it (a gap in the key, e.g. a cream letter stroke), the end of the trap is cut into a bevel instead of a square corner sitting right against the paper. Traps across thin key lines keep their full width. Only traps under the key are touched, and nothing visible changes with all layers on. Leave off to keep traps exactly as before.</div>
+        </div>
         <div class="setting-box" title="Under the key, the colour you see right next to the key edge is put on top in the trap zone (up to the trap width), so that is the colour that shows if the key prints off register. Colours printed later are taken out there; a thin sliver (under 3 px) of a later colour between them counts as the colour it lies against (e.g. olive under a 1-2 px blue line). Nothing changes next to paper (key pullback), overlays are never cut, and nothing visible changes with all layers on. Leave off to keep traps exactly as before.">
           <div class="check-row">
             <input id="keyTrapsFollowVisible" type="checkbox">
@@ -99,8 +101,6 @@ function panelMarkup() {
             <span class="check-text" data-for="tonalInks" style="color:#f2f2f2; opacity:1;">Tonal inks (grayscale layers)</span>
           </div>
           <div class="field-help">For files where every colour is a grayscale / textured layer (tones in the layer, soft edges, a stipple key), e.g. DMB Fall Tour 2026. Inks keep their tones. Traps go only under solid key line work (never under the stipple, paper specks or highlights), 5 px, split down the middle of a line between two inks, and each trap carries that ink's own tone and grain from its edge. No ink-to-ink traps; round / smooth / bevel / follow-visible / halo are not used. The key does not cut the inks (Progressive Knockout skips the key; Cut Top Key is blocked). Leave off for normal solid-colour files.</div>
-        </div>
-          <div class="field-help">Where a trap under the key runs up to bare paper beside it (a gap in the key, e.g. a cream letter stroke), the end of the trap is cut into a bevel instead of a square corner sitting right against the paper. Traps across thin key lines keep their full width. Only traps under the key are touched, and nothing visible changes with all layers on. Leave off to keep traps exactly as before.</div>
         </div>
         <div class="field" title="How solid a pixel must be to count as ink (0-255). Soft edge pixels below this are treated as paper. 90 = about 35% opacity. Only used when Preflight cleanup is on.">
           <div class="field-label">Alpha threshold</div>
