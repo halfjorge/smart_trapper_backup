@@ -1,0 +1,34 @@
+{
+  "date": "2026-10-26",
+  "file": "MMJ_OBH27_poster.psd",
+  "job_type": "Illustrated / organic (with a Darken overlay)",
+  "made_with": "panel",
+  "job_folder": "TrapJobs\\MMJ_OBH27_poster.psd__UXP__2026-10-26T18-46-18-489Z",
+  "settings": {
+    "ppi": 300,
+    "trap_px_note": "trap width = panel 'Trap' field (not stored in job.json; 5 @300 unless noted)",
+    "preflightCleanup": true,
+    "roundTraps": true,
+    "keyTrapsFollowVisible": true,
+    "smoothKeyTraps": true,
+    "bevelKeyCorners": true,
+    "overlayLayers": true,
+    "closeKeyHalo": false,
+    "tonalInks": false,
+    "alphaThreshold": 90,
+    "edgeBiasPx": 1,
+    "keyTrapPullbackPx": 1,
+    "colorTrapPullbackPx": 0,
+    "inks": [
+      "1505 U",
+      "232 u",
+      "116 u",
+      "3115 U"
+    ],
+    "key": "281 u",
+    "trap_px": 5
+  },
+  "verdict": "APPROVED (became the Illustrated preset)",
+  "note": "Sara: \"much more organic at the key edge instead of those hard lines\". Watch: 232 u slivers at narrow key tips (key-off view only).",
+  "recorded_by": "Claude (backfilled 2026-10-26 from TrapJobs + project notes)"
+}

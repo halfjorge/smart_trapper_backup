@@ -1,0 +1,36 @@
+{
+  "date": "2026-10-19",
+  "file": "Obey poster (Sepped_GM-SHEP / Obey_joint_fix_600.psd)",
+  "job_type": "Geometric / hard-edged",
+  "made_with": "panel",
+  "job_folder": "TrapJobs\\Obey_joint_fix_600.psd__UXP__2026-10-19T19-33-21-746Z",
+  "settings": {
+    "ppi": 300,
+    "trap_px_note": "trap width = panel 'Trap' field (not stored in job.json; 5 @300 unless noted)",
+    "preflightCleanup": true,
+    "roundTraps": false,
+    "keyTrapsFollowVisible": false,
+    "smoothKeyTraps": true,
+    "bevelKeyCorners": true,
+    "overlayLayers": true,
+    "closeKeyHalo": false,
+    "tonalInks": false,
+    "alphaThreshold": 90,
+    "edgeBiasPx": 0,
+    "keyTrapPullbackPx": 1,
+    "colorTrapPullbackPx": 0,
+    "inks": [
+      "COLOR__Yellow",
+      "COLOR__Cream",
+      "COLOR__Red",
+      "COLOR__Light Blue",
+      "COLOR__Blue",
+      "COLOR__Dark blue"
+    ],
+    "key": "Key",
+    "trap_px": 5
+  },
+  "verdict": "APPROVED (better)",
+  "note": "Sara: re-run with Round OFF + follow-visible OFF at 300 ppi, trap 5, came out better than the morning run. Remaining hand work: mitred joints at the key -> see recipes/Obey_GM-SHEP_2026-10.md (offline v2).",
+  "recorded_by": "Claude (backfilled 2026-10-26 from TrapJobs + project notes)"
+}

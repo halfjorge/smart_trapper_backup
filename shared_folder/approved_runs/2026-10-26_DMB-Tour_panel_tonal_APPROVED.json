@@ -1,0 +1,35 @@
+{
+  "date": "2026-10-26",
+  "file": "DMB_Fall_tour_2026 (1).psd",
+  "job_type": "Grayscale / textured layers",
+  "made_with": "panel (Tonal inks)",
+  "job_folder": "TrapJobs\\DMB_Fall_tour_2026 (1).psd__UXP__2026-10-26T17-56-15-961Z",
+  "settings": {
+    "ppi": 300,
+    "trap_px_note": "trap width = panel 'Trap' field (not stored in job.json; 5 @300 unless noted)",
+    "preflightCleanup": true,
+    "roundTraps": true,
+    "keyTrapsFollowVisible": false,
+    "smoothKeyTraps": true,
+    "bevelKeyCorners": true,
+    "overlayLayers": true,
+    "closeKeyHalo": false,
+    "tonalInks": true,
+    "alphaThreshold": 90,
+    "edgeBiasPx": 0,
+    "keyTrapPullbackPx": 1,
+    "colorTrapPullbackPx": 0,
+    "inks": [
+      "Orange",
+      "Light Red",
+      "Purple",
+      "Dark Red",
+      "Blue/green"
+    ],
+    "key": "Black/keyline",
+    "trap_px": 5
+  },
+  "verdict": "APPROVED (\"that looks good\")",
+  "note": "First panel run with Tonal inks. Engine output = the approved offline poster exactly. Round/smooth/bevel/overlay ticks are ignored in tonal mode.",
+  "recorded_by": "Claude (backfilled 2026-10-26 from TrapJobs + project notes)"
+}

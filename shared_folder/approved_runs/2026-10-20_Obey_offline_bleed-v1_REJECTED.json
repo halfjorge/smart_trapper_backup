@@ -1,0 +1,10 @@
+{
+  "date": "2026-10-20",
+  "file": "Obey -> Obey_roundtraps_off_MITRED_v2_600_bleed.zip",
+  "job_type": "Geometric / hard-edged",
+  "made_with": "Claude offline (tools/obey/bleed.py + bleed_psd.py)",
+  "verdict": "REJECTED",
+  "note": "White 4-row paper line at the bottom trim and an obvious seam in the flower pattern bleed.",
+  "recipe": "recipes/Obey_GM-SHEP_2026-10.md",
+  "recorded_by": "Claude (backfilled 2026-10-26 from TrapJobs + project notes)"
+}

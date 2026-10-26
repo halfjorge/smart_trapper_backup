@@ -1,0 +1,16 @@
+{
+  "date": "2026-10-20",
+  "file": "Obey -> Trap Examples\\Obey\\Obey_roundtraps_off_MITRED_v2_600_bleed_fixed.zip",
+  "job_type": "Geometric / hard-edged",
+  "made_with": "Claude offline (bleed_pattern_fix.py + bleed_psd.py --fill-inset)",
+  "settings": {
+    "bleed_in": 0.25,
+    "canvas": "9900x12300 @600",
+    "texture": "pure mirror at the trim",
+    "solid_shapes": "carried at their own angle",
+    "bottom_paper_sliver": "filled (4 rows)"
+  },
+  "verdict": "DELIVERED - verdict not recorded (Sara asked for the file name only)",
+  "recipe": "recipes/Obey_GM-SHEP_2026-10.md",
+  "recorded_by": "Claude (backfilled 2026-10-26 from TrapJobs + project notes)"
+}

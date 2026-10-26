@@ -1,0 +1,19 @@
+{
+  "date": "2026-10-20",
+  "file": "Obey -> Trap Examples\\Obey\\Obey_roundtraps_off_MITRED_v2_600.zip",
+  "job_type": "Geometric / hard-edged",
+  "made_with": "Claude offline (tools/obey/mitre.py v2)",
+  "settings": {
+    "trap_px_under_key": "12 @600 ppi",
+    "mitre_min_angle_deg": 25,
+    "lower_colour_band_carried_into_key": true,
+    "upper_colour_ends_on_own_edge": true,
+    "shallow_joints": "keep overlap, clear slivers < 5 px",
+    "square_real_corners": true,
+    "loose_dots_removed": true,
+    "doubled_ink": "cleared"
+  },
+  "verdict": "APPROVED (\"your last file looks good\")",
+  "recipe": "recipes/Obey_GM-SHEP_2026-10.md",
+  "recorded_by": "Claude (backfilled 2026-10-26 from TrapJobs + project notes)"
+}
