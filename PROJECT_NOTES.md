@@ -25,7 +25,7 @@ The DMB Fall Tour content-aware trapping is now in the engine (SmartTrapperB1/en
   (ties: leftmost, then topmost); CLEAN = original tones; no ink-to-ink traps (agreed); halo/round/smooth/
   bevel/follow-visible/pullback not used. Panel: Progressive Knockout does not cut with the key; "Cut Top
   Key From Colors" is blocked while it's on. Panel import unchanged (soft transparency selection + fill keeps
-  the tone) - TO CONFIRM on Sara's PC.
+  the tone) - CONFIRMED by Sara in Photoshop 2026-10-26 13:57 ("that looks good").
 - Tests: DMB Tour job through the engine = the approved poster exactly (0 of 5,460,779 trap px differ, CLEAN
   tones identical). Box off: DMB Nash job old vs new engine IDENTICAL (22 files, --compare-jobs). cargo test 7/7.
 - Sara: run BUILD_AND_TEST_ENGINE.bat, then Reload the panel. Backups: versions\engine_main_backup_2026-10-26_
