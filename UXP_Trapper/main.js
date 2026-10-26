@@ -595,6 +595,41 @@ function createController(rootNode) {
     currentLogFolderEntry = await tryBindFolderEntryFromPath(s.logFolder);
   }
 
+  // Another computer (the co-worker's Mac, 2026-10-26): the default folders point at Sara's Windows
+  // Desktop, which doesn't exist there. If the job folder can't be found, use <home>/SmartTrapper/TrapJobs
+  // (and .../status_logs), made if missing. <home> comes from the helper's /health ("homeDir"); the Python
+  // bridge on Sara's PC doesn't send it, and her folder exists anyway, so nothing changes on her PC.
+  // Not the Desktop on purpose: macOS asks permission before a background program may use the Desktop.
+  async function setUpFoldersForThisComputer(homeFromHealth) {
+    if (currentJobFolderEntry) return false;
+    let home = String(homeFromHealth || "");
+    if (!home) {
+      try {
+        const r = await fetch(String(getSettings().bridgeUrl || DEFAULTS.bridgeUrl).replace(/\/$/, "") + "/health");
+        home = String((JSON.parse(await r.text()) || {}).homeDir || "");
+      } catch (e) { home = ""; }
+    }
+    if (!home) return false;
+    const homeEntry = await tryBindFolderEntryFromPath(home);
+    if (!homeEntry) return false;
+    const sub = async (parent, name) => {
+      try { return await parent.getEntry(name); } catch (e) {}
+      try { return await parent.createFolder(name); } catch (e) { return null; }
+    };
+    const base = await sub(homeEntry, "SmartTrapper");
+    const jobs = base ? await sub(base, "TrapJobs") : null;
+    if (!jobs) return false;
+    currentJobFolderEntry = jobs;
+    els.jobFolderDisplay.textContent = jobs.nativePath || (home + "/SmartTrapper/TrapJobs");
+    if (!currentLogFolderEntry) {
+      const logs = await sub(base, "status_logs");
+      if (logs) { currentLogFolderEntry = logs; els.logFolderDisplay.textContent = logs.nativePath || (home + "/SmartTrapper/status_logs"); }
+    }
+    persistSettingsSilently();
+    try { appendStatus("Job folders on this computer:\n" + els.jobFolderDisplay.textContent + "\n" + els.logFolderDisplay.textContent); } catch (e) {}
+    return true;
+  }
+
   function normalizePathLikeText(value) {
     const text = String(value || "").trim();
     if (!text || text === "(none selected)") return "";
@@ -4598,6 +4633,12 @@ function createController(rootNode) {
         return await stop("checks", "The helper is running but the trapping engine program is missing:\n" + String(health.enginePath || ""),
           "The install is incomplete - the engine needs to be installed.");
       }
+      try { await setUpFoldersForThisComputer(health.homeDir); } catch (e) {}
+      await ensureCurrentJobFolderEntry();
+      if (!currentJobFolderEntry) {
+        return await stop("checks", "The trapper's job folder could not be found or made (" + String(getSettings().jobFolder || "") + ").",
+          "Send a Save Status Snapshot to Sara.");
+      }
 
       // ---- Step 1: Progressive Knockout ----
       runProgressStepPrefix = "Step 1 of 4";
@@ -4779,6 +4820,7 @@ function createController(rootNode) {
     bindEls();
     loadSettings();
     await rebindFolderEntriesFromSettings();
+    try { await setUpFoldersForThisComputer(); } catch (e) {}
     wireEvents();
     await refreshDocumentSummary();
     // Re-check the open document every couple of seconds (switching files,

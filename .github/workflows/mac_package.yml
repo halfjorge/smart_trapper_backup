@@ -1,0 +1,56 @@
+name: Mac package (Smart Trapper)
+# Builds the engine + helper for Mac (Apple Silicon and Intel in one file), assembles the co-worker's
+# installer zip, then tests it on the Mac runner: install, helper answers, real trap job, panel tests.
+on:
+  workflow_dispatch:
+  push:
+    branches: [trapper_2026_10, mac_installer]
+    paths: ['SmartTrapperB1/**', 'installer/mac/**', 'UXP_Trapper/**', 'tools/dev/make_shared_copy.py', '.github/workflows/mac_package.yml']
+jobs:
+  build:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - name: Rust targets
+        run: rustup target add aarch64-apple-darwin x86_64-apple-darwin
+      - name: Build engine + helper (both Mac chip types)
+        run: |
+          for t in aarch64-apple-darwin x86_64-apple-darwin; do
+            cargo build --release --manifest-path SmartTrapperB1/engine/Cargo.toml --target $t
+            cargo build --release --manifest-path SmartTrapperB1/helper/Cargo.toml --target $t
+          done
+          mkdir -p bin
+          lipo -create -output bin/smart_trapper_b1 SmartTrapperB1/engine/target/{aarch64,x86_64}-apple-darwin/release/smart_trapper_b1
+          lipo -create -output bin/smart_trapper_helper SmartTrapperB1/helper/target/{aarch64,x86_64}-apple-darwin/release/smart_trapper_helper
+          codesign --force -s - bin/smart_trapper_b1 bin/smart_trapper_helper   # ad-hoc signature (needed on Apple Silicon)
+          lipo -info bin/*
+      - name: Engine unit tests
+        run: cargo test --release --manifest-path SmartTrapperB1/engine/Cargo.toml
+      - name: Assemble installer zip
+        run: installer/mac/build_package.sh "$PWD/bin" "$PWD/dist"
+      - name: Test the installer on this Mac
+        env: { SMART_TRAPPER_CI: '1' }
+        run: |
+          cd dist && rm -rf t && mkdir t && cd t && ditto -x -k ../SmartTrapper_Mac.zip . 
+          "./Smart Trapper Installer/Install Smart Trapper.command"
+          curl -s http://127.0.0.1:8765/health
+          ls -la "$HOME/Library/Application Support/SmartTrapper" "$HOME/SmartTrapper" "$HOME/Library/LaunchAgents"
+          plutil -lint "$HOME/Library/LaunchAgents/com.thehalfandhalf.smarttrapper.helper.plist"
+          launchctl print "gui/$(id -u)/com.thehalfandhalf.smarttrapper.helper" | head -20 || echo "(launchd gui domain not available on this runner - helper started directly)"
+      - name: Real trap job through the installed helper
+        run: |
+          python3 -m pip install --quiet --break-system-packages numpy pillow || python3 -m pip install --quiet numpy pillow
+          python3 tools/ui_tests/make_test_job.py "$HOME/SmartTrapper/TrapJobs/ci_job"
+          curl -s -X POST -H 'Content-Type: application/json' -d "{\"settings\":{\"jobFolder\":\"$HOME/SmartTrapper/TrapJobs/ci_job\",\"trapPx\":5}}" http://127.0.0.1:8765/run | tee run.json
+          grep -q '"ok": true' run.json
+          cat "$HOME/SmartTrapper/TrapJobs/ci_job/traps.json"
+      - name: Uninstall test
+        env: { SMART_TRAPPER_CI: '1' }
+        run: |
+          "dist/t/Smart Trapper Installer/Uninstall Smart Trapper.command" || true
+          ! curl -s -m 2 http://127.0.0.1:8765/health
+          test ! -d "$HOME/Library/Application Support/SmartTrapper"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: SmartTrapper_Mac
+          path: dist/SmartTrapper_Mac.zip

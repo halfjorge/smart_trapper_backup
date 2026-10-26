@@ -32,7 +32,8 @@ window.fetch = async (url, opts) => { const r = await window.__nodeFetch(String(
   return { ok: r.ok, status: r.status, statusText: r.statusText, text: async () => r.text }; };
 function __fileEntry(p) { return { isFile: true, isFolder: false, name: p.split('/').pop(), nativePath: p, read: async () => window.__fsRead(p) }; }
 function __folderEntry(p) { return { isFile: false, isFolder: true, name: p.split('/').pop(), nativePath: p,
-  getEntry: async (n) => { const q = p + '/' + n; const s = await window.__fsStat(q); if (!s.exists) throw new Error('not found ' + q); return s.isFolder ? __folderEntry(q) : __fileEntry(q); } }; }
+  getEntry: async (n) => { const q = p + '/' + n; const s = await window.__fsStat(q); if (!s.exists) throw new Error('not found ' + q); return s.isFolder ? __folderEntry(q) : __fileEntry(q); },
+  createFolder: async (n) => { const q = p + '/' + n; await window.__mkdir(q); return __folderEntry(q); } }; }
 const __lfs = { getEntryWithUrl: async (u) => { const p = String(u).replace(/^file:/, ''); const s = await window.__fsStat(p);
   if (!s.exists) throw new Error('no ' + p); return s.isFolder ? __folderEntry(p) : __fileEntry(p); } };
 window.__app = { activeDocument: null, showAlert: async (m) => { window.__alerts.push(String(m)); } };
@@ -89,6 +90,7 @@ const scenarios = [
       catch (e) { throw new Error('Failed to fetch: ' + e.message); } });
     await page.exposeFunction('__fsStat', async (p) => { try { const s = fs.statSync(p); return { exists: true, isFolder: s.isDirectory() }; } catch (e) { return { exists: false }; } });
     await page.exposeFunction('__fsRead', async (p) => fs.readFileSync(p, 'utf8'));
+    await page.exposeFunction('__mkdir', async (p) => { fs.mkdirSync(p, { recursive: true }); return true; });
     await page.exposeFunction('__makeJob', async (t) => { const d = JOBS + '/test_poster__UXP__' + Date.now() + Math.floor(Math.random() * 1000);
       fs.mkdirSync(d, { recursive: true }); fs.cpSync(TEMPLATES[t], d, { recursive: true }); return d; });
     await page.goto('file://' + OUTDIR + '/panel_test.html');
@@ -129,6 +131,7 @@ const scenarios = [
   await page.exposeFunction('__nodeFetch', async (url, opts) => { const r = await fetch(url, opts); return { ok: r.ok, status: r.status, statusText: r.statusText, text: await r.text() }; });
   await page.exposeFunction('__fsStat', async (p) => { try { const s = fs.statSync(p); return { exists: true, isFolder: s.isDirectory() }; } catch (e) { return { exists: false }; } });
   await page.exposeFunction('__fsRead', async (p) => fs.readFileSync(p, 'utf8'));
+    await page.exposeFunction('__mkdir', async (p) => { fs.mkdirSync(p, { recursive: true }); return true; });
   await page.exposeFunction('__makeJob', async (t) => { const d = JOBS + '/indiv_' + Date.now(); fs.mkdirSync(d, { recursive: true }); fs.cpSync(TEMPLATES[t], d, { recursive: true }); return d; });
   await page.goto('file://' + OUTDIR + '/panel_test.html');
   const indiv = await page.evaluate(async ({ doc, OK }) => {
@@ -144,7 +147,26 @@ const scenarios = [
     out.push('engine-only status: ' + (document.getElementById('status').textContent.match(/Traps made by the engine: \d+/) || ['?'])[0]);
     return out;
   }, { doc: poster(), OK });
+  // Folders on another computer (Mac) vs Sara's PC
+  const folderChecks = [];
+  for (const mode of ['other computer', 'sara pc']) {
+    const HOME = process.env.HOME || '/root';
+    fs.rmSync(HOME + '/SmartTrapper', { recursive: true, force: true });
+    const pg = await browser.newPage();
+    await pg.exposeFunction('__nodeFetch', async (url, opts) => { const r = await fetch(url, opts); return { ok: r.ok, status: r.status, statusText: r.statusText, text: await r.text() }; });
+    await pg.exposeFunction('__fsStat', async (p) => { try { const s = fs.statSync(p); return { exists: true, isFolder: s.isDirectory() }; } catch (e) { return { exists: false }; } });
+    await pg.exposeFunction('__fsRead', async (p) => fs.readFileSync(p, 'utf8'));
+    await pg.exposeFunction('__mkdir', async (p) => { fs.mkdirSync(p, { recursive: true }); return true; });
+    await pg.goto('file://' + OUTDIR + '/panel_test.html');
+    if (mode === 'sara pc') await pg.evaluate((j) => localStorage.setItem('smartTrapperSettings', JSON.stringify({ jobFolder: j, logFolder: j, bridgeUrl: 'http://127.0.0.1:8765' })), JOBS);
+    const shown = await pg.evaluate(async () => { window.__app.activeDocument = null; window.__hooks = {};
+      await window.__uxpCfg.panels['smart-trapper-panel'].create(document.getElementById('root'));
+      return { job: document.getElementById('jobFolderDisplay').textContent, log: document.getElementById('logFolderDisplay').textContent }; });
+    folderChecks.push(mode + ': job folder shown = ' + shown.job + ' | log folder = ' + shown.log + ' | ' + HOME + '/SmartTrapper made: ' + fs.existsSync(HOME + '/SmartTrapper/TrapJobs'));
+    await pg.close();
+  }
   await browser.close();
+  console.log('\n### Folders\n  ' + folderChecks.join('\n  '));
   fs.writeFileSync(OUTDIR + '/results.json', JSON.stringify({ results, indiv }, null, 2));
   for (const r of results) {
     console.log('\n### ' + r.name + '\n  steps called: ' + (r.calls.join(' -> ') || '(none)') + '\n  progress: ' + r.progress + '\n  alerts: ' + r.alerts.length +

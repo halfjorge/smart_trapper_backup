@@ -1,0 +1,19 @@
+SMART TRAPPER - installing on this Mac
+======================================
+
+1. Double-click "Install Smart Trapper.command".
+
+2. The FIRST time only, the Mac may say it "can't be opened because Apple cannot check it"
+   (it is our own shop tool, not from the App Store):
+     - click Done (NOT Move to Trash)
+     - open System Settings > Privacy & Security
+     - scroll down to the message about "Install Smart Trapper" and click Open Anyway
+     - type your Mac password if asked, then click Open
+   A Terminal window opens and shows the steps; a message says when it's finished.
+
+3. If Creative Cloud asks whether to install "Smart Trapper UXP", click Install.
+
+4. Quit and reopen Photoshop. The panel is under Plugins > Smart Trapper UXP > Smart Trapper.
+
+The guide (Smart_Trapper_Guide.pdf) is copied to your Home folder > SmartTrapper.
+Problems: take a screenshot and send it to Sara.

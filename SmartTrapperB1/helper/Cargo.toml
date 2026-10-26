@@ -1,0 +1,11 @@
+[package]
+name = "smart_trapper_helper"
+version = "1.0.0"
+edition = "2021"
+description = "Smart Trapper helper: the small local service the Photoshop panel talks to (replaces real_bridge.py, no Python needed)"
+
+[dependencies]
+serde_json = "1"
+
+[profile.release]
+debug = false
