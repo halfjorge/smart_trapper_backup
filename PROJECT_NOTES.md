@@ -26,7 +26,7 @@ Edit only your own line here; fetch/pull first and re-check before every push or
 - **Shared-folder / settings session** (session_01MD548tCq1R9E4kh1AaC8Mr): fills "SmartTrapper Shared"
   (`presets.json`, `approved_runs/`, `recipes/`) with the past approved settings. Please: no panel-code
   changes, and write `presets.json` in the format the panel reads -> **`docs/shared_folder/FORMAT.md`** and
-  **`docs/shared_folder/presets.example.json`** (on branch `mac_installer`; the agreed values, ready to copy).
+  **`docs/shared_folder/presets.example.json`** (on `trapper_2026_10` and `mac_installer`; the agreed values, ready to copy).
   The reader is tolerant (list or object of types, "illustrated" = standard, job.json names accepted), but
   that format is the safe one. `approved_runs/`: one file per entry, name
   `YYYY-MM-DD_HHMMSS_<who>_<psd name>.json`, fields in FORMAT.md.
