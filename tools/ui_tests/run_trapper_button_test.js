@@ -21,6 +21,7 @@ swap('async function exportMasksToJobFolderForRun(',
   'async function exportMasksToJobFolderForRun(p) { const r = await window.__hook("exportMasks"); currentJobFolderEntry = await tryBindFolderEntryFromPath(r.jobFolder); els.jobFolderDisplay.textContent = r.jobFolder; return r; }\n  async function __real_export(');
 swap('async function prepareImportStructure() {',
   'async function prepareImportStructure() { return await window.__hook("prepare"); }\n  async function __real_prepare() {');
+swap('async function init() {', 'async function init() { window.__ctl = { getSettings, buildCurrentJobSpec };');
 swap('async function importTraps() {',
   'async function importTraps() { return await window.__hook("import"); }\n  async function __real_import() {');
 

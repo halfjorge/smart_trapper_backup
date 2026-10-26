@@ -35,12 +35,69 @@ const DEFAULTS = {
   logFolder: DEFAULT_LOG_FOLDER
 };
 
+// "What kind of file is this?" (2026-10-26, Sara's values). Picking a type only fills in the
+// existing settings below; every box can still be changed afterwards. A fresh install starts on
+// Standard poster. Saved settings (Sara's) are kept as they are - the picker just shows which type
+// they match, or Custom. The type itself is NOT sent to the engine (job.json lists each setting).
+const FILE_TYPE_BASE = {
+  fullDebug: false, preflightCleanup: true, roundTraps: true, closeKeyHalo: false, overlayLayers: false,
+  smoothKeyTraps: false, bevelKeyCorners: false, keyTrapsFollowVisible: false, tonalInks: false,
+  alphaThreshold: 90, edgeBiasPx: 1, keyTrapPullbackPx: 1, colorTrapPullbackPx: 0, trapPx: 5
+};
+const FILE_TYPES = [
+  { id: "standard", label: "Standard poster",
+    help: "Solid flat colours with key line work - most posters.",
+    values: Object.assign({}, FILE_TYPE_BASE) },
+  { id: "geometric", label: "Geometric / flat shapes",
+    help: "Hard-edged shapes, straight lines and corners (e.g. Obey). Square traps; smooth and bevel on.",
+    values: Object.assign({}, FILE_TYPE_BASE, { roundTraps: false, keyTrapsFollowVisible: false, smoothKeyTraps: true, bevelKeyCorners: true }) },
+  { id: "overlay", label: "Overlay / Multiply layers",
+    help: "Has Multiply / Darken layers or layers under 100% opacity. Colours under them are kept.",
+    values: Object.assign({}, FILE_TYPE_BASE, { overlayLayers: true }) },
+  { id: "tonal", label: "Tonal / grayscale",
+    help: "Every colour is a grayscale / textured layer (e.g. DMB Fall Tour). No knockout; traps only under solid key lines.",
+    values: Object.assign({}, FILE_TYPE_BASE, { tonalInks: true }) }
+];
+const FILE_TYPE_SETTING_NAMES = {
+  fullDebug: "Full debug logging", preflightCleanup: "Preflight cleanup", roundTraps: "Round traps",
+  closeKeyHalo: "Close key halo", overlayLayers: "Overlay layers", smoothKeyTraps: "Smooth traps under the key",
+  bevelKeyCorners: "Bevel trap corners", keyTrapsFollowVisible: "Key traps follow the colour you see",
+  tonalInks: "Tonal inks", alphaThreshold: "Alpha threshold", edgeBiasPx: "Edge bias",
+  keyTrapPullbackPx: "Key trap pullback", colorTrapPullbackPx: "Colour trap pullback", trapPx: "Trap width"
+};
+function fileTypeById(id) { return FILE_TYPES.find((t) => t.id === id) || null; }
+// Settings that differ from a type's values: [{ key, name, typeValue, nowValue }]
+function fileTypeDifferences(type, settings) {
+  const out = [];
+  if (!type || !settings) return out;
+  Object.keys(type.values).forEach((k) => {
+    const want = type.values[k];
+    const now = settings[k];
+    const same = (typeof want === "boolean") ? (!!now === want) : (Number(now) === Number(want));
+    if (!same) out.push({ key: k, name: FILE_TYPE_SETTING_NAMES[k] || k, typeValue: want, nowValue: now });
+  });
+  return out;
+}
+function matchingFileTypeId(settings) {
+  const t = FILE_TYPES.find((ft) => fileTypeDifferences(ft, settings).length === 0);
+  return t ? t.id : "custom";
+}
+
 function panelMarkup() {
   return `
     <div class="app">
       <div id="fileCheckBanner" style="display:none; background:#b3261e; color:#ffffff; font-weight:bold; padding:8px 10px; margin:0 0 8px 0; border-radius:4px; white-space:pre-line; line-height:1.35;"></div>
       <div class="panel">
         <div class="section-title">Run Settings</div>
+        <div class="field" title="Pick the kind of file to fill in the usual settings for it. You can still change any setting below afterwards.">
+          <div class="field-label">What kind of file is this?</div>
+          <select id="fileType" style="width:100%;">
+            ${FILE_TYPES.map((t) => `<option value="${t.id}">${t.label}</option>`).join("")}
+            <option value="custom">Custom (my own settings)</option>
+          </select>
+          <div id="fileTypeNote" style="font-size:11px; opacity:0.9; margin-top:4px; white-space:pre-line; line-height:1.35;"></div>
+          <button id="fileTypeResetBtn" class="button secondary full" style="display:none; margin-top:6px;">Put back the type's settings</button>
+        </div>
         <button id="helpToggleBtn" class="help-toggle">? Explain settings</button>
         <div class="setting-box" title="Currently has no effect. Reserved for extra detail in the status log.">
           <div class="check-row">
@@ -204,6 +261,9 @@ function createController(rootNode) {
     [
       "refreshDocBtn",
       "helpToggleBtn",
+      "fileType",
+      "fileTypeNote",
+      "fileTypeResetBtn",
       "fullDebug",
       "preflightCleanup",
       "roundTraps",
@@ -334,6 +394,7 @@ function createController(rootNode) {
       return text;
     };
     return {
+      fileType: els.fileType ? String(els.fileType.value || "custom") : "custom",
       fullDebug: !!els.fullDebug.checked,
       preflightCleanup: !!els.preflightCleanup.checked,
       roundTraps: !!els.roundTraps.checked,
@@ -373,12 +434,60 @@ function createController(rootNode) {
     els.bridgeUrlDisplay.textContent = s.bridgeUrl;
     els.jobFolderDisplay.textContent = String(s.jobFolder || "").trim() || DEFAULTS.jobFolder;
     els.logFolderDisplay.textContent = String(s.logFolder || "").trim() || DEFAULTS.logFolder;
+    if (els.fileType) {
+      // A saved type is kept; settings saved before the picker existed show the type they match (or Custom).
+      const saved = (settings && fileTypeById(settings.fileType)) ? settings.fileType
+        : ((settings && settings.fileType === "custom") ? "custom" : matchingFileTypeId(s));
+      els.fileType.value = saved;
+    }
+    try { refreshFileTypeNote(); } catch (e) {}
+  }
+
+  // Shows what the picked type means, or which settings were changed from it.
+  function refreshFileTypeNote() {
+    if (!els.fileType || !els.fileTypeNote) return;
+    const type = fileTypeById(els.fileType.value);
+    if (!type) {
+      els.fileTypeNote.textContent = "Your own settings - set the boxes below.";
+      if (els.fileTypeResetBtn) els.fileTypeResetBtn.style.display = "none";
+      return;
+    }
+    const diffs = fileTypeDifferences(type, getSettings());
+    if (!diffs.length) {
+      els.fileTypeNote.textContent = type.help;
+      if (els.fileTypeResetBtn) els.fileTypeResetBtn.style.display = "none";
+      return;
+    }
+    const show = (v) => (typeof v === "boolean") ? (v ? "on" : "off") : String(v);
+    els.fileTypeNote.textContent = "ADJUSTED from " + type.label + ":\n" +
+      diffs.map((d) => "  " + d.name + " " + show(d.nowValue) + " (usual " + show(d.typeValue) + ")").join("\n");
+    if (els.fileTypeResetBtn) {
+      els.fileTypeResetBtn.textContent = "Put back " + type.label + " settings";
+      els.fileTypeResetBtn.style.display = "";
+    }
+  }
+
+  function applyFileType(id) {
+    const type = fileTypeById(id);
+    if (!type) { refreshFileTypeNote(); persistSettingsSilently(); return; }
+    const keep = getSettings();   // bridge URL and folders stay as they are
+    applySettings(Object.assign({}, keep, type.values, { fileType: type.id }));
+    persistSettingsSilently();
+    try { updateFileCheckBanner(); } catch (e) {}
+    appendStatus("File type: " + type.label + " - settings filled in.");
+  }
+
+  function fileTypeSummary(settings) {
+    const type = fileTypeById(settings && settings.fileType);
+    if (!type) return "Custom (own settings)";
+    return type.label + (fileTypeDifferences(type, settings).length ? " (adjusted)" : "");
   }
 
   function loadSettings() {
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
-      if (!raw) return applySettings(DEFAULTS);
+      // Fresh install: start on the Standard poster type (2026-10-26). Saved settings are never replaced.
+      if (!raw) return applySettings(Object.assign({}, DEFAULTS, fileTypeById("standard").values, { fileType: "standard" }));
       const parsed = JSON.parse(raw) || {};
       if (!String(parsed.jobFolder || "").trim() || parsed.jobFolder === "(none selected)") {
         parsed.jobFolder = DEFAULTS.jobFolder;
@@ -4427,6 +4536,7 @@ function createController(rootNode) {
 
     try {
       appendStatus(statusStamp("Run Trapper (all steps)"));
+      try { appendStatus("File type: " + fileTypeSummary(getSettings())); } catch (e) {}
       runProgressStepPrefix = "Checking";
       setRunProgress(0, "file");
 
@@ -4467,7 +4577,7 @@ function createController(rootNode) {
         return await stop("checks",
           "This file has transparent / overlay layers (" + overlayNames.join(", ") + "), but 'File has transparent / overlay layers' is not ticked. " +
           "Without it the knockout would cut colours out from under those layers and change how the poster prints.",
-          "Tick 'File has transparent / overlay layers', then click Run Trapper again.");
+          "Pick 'Overlay / Multiply layers' under 'What kind of file is this?' (or tick 'File has transparent / overlay layers'), then click Run Trapper again.");
       }
 
       setRunProgress(0, "helper");
@@ -4543,6 +4653,7 @@ function createController(rootNode) {
       const lines = [
         warnings.length ? "RUN TRAPPER FINISHED - WITH WARNINGS" : "RUN TRAPPER FINISHED",
         "",
+        "File type: " + fileTypeSummary(settings),
         "Progressive Knockout: " + (settings.tonalInks ? "skipped (Tonal inks)" : "done"),
         "Traps imported: " + im.placed + " of " + im.total,
         "Time: " + secs + " s"
@@ -4580,6 +4691,7 @@ function createController(rootNode) {
         if (!box) return;
         box.checked = !box.checked;
         persistSettingsSilently();
+        try { refreshFileTypeNote(); } catch (e) {}
       });
     });
 
@@ -4592,11 +4704,19 @@ function createController(rootNode) {
       });
     }
 
+    if (els.fileType) {
+      els.fileType.addEventListener("change", () => applyFileType(els.fileType.value));
+    }
+    if (els.fileTypeResetBtn) {
+      els.fileTypeResetBtn.addEventListener("click", () => applyFileType(els.fileType.value));
+    }
     ["fullDebug", "preflightCleanup", "roundTraps", "closeKeyHalo", "overlayLayers", "smoothKeyTraps", "bevelKeyCorners", "keyTrapsFollowVisible", "tonalInks", "alphaThreshold", "edgeBiasPx", "keyTrapPullbackPx", "colorTrapPullbackPx", "trapPx"].forEach((id) => {
       const el = els[id];
       if (!el) return;
       el.addEventListener("change", persistSettingsSilently);
       el.addEventListener("input", persistSettingsSilently);
+      el.addEventListener("change", () => { try { refreshFileTypeNote(); } catch (e) {} });
+      el.addEventListener("input", () => { try { refreshFileTypeNote(); } catch (e) {} });
     });
     if (els.overlayLayers) {
       els.overlayLayers.addEventListener("change", () => { try { updateFileCheckBanner(); } catch (e) {} });
