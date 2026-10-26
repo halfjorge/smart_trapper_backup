@@ -111,6 +111,19 @@ back <type> settings" button). `fileType` is saved with the settings but NOT sen
 - Sharing bits already in the repo: SmartTrapper_Share folder, SHARE_README_WINDOWS_MAC.txt,
   build_smart_trapper_bundle.py (not reviewed this session - check what they do before reusing).
 
+**DEFAULT SETTINGS / PRESETS (agreed with Sara 2026-10-26, from MMJ_OBH27 runs 1 vs 2):**
+Always: Preflight cleanup ON, Alpha threshold 90, Edge bias 1, Key trap pullback 1, Colour trap pullback 0,
+Trap 5 px @300 ppi (10 @600), Close key halo OFF (only for files with white outlines round the key, Phish),
+Tonal inks OFF. "File has overlay layers" ON whenever any layer is non-Normal or under 100% (panel can detect).
+- Illustrated / organic (most posters) = Sara's MMJ run 2: Round ON, Key traps follow visible ON, Smooth ON,
+  Bevel ON. (Run 2 vs run 1: Smooth/Bevel turned straight trap bands along the key into organic edges
+  following the shapes - Sara: "much more organic at the key edge instead of those hard lines".)
+- Geometric / hard-edged (Obey): Round OFF, Key traps follow visible OFF, Smooth ON, Bevel ON.
+- Grayscale / textured layers (DMB Tour): Tonal inks ON (other boxes not used).
+Parked idea (engine, needs Sara's OK): with overlay mode, split the key line where an overlay's key trap and
+another colour's key trap overlap (MMJ: 116 frame trap + 3115 Darken trap made a green band under the key;
+Smooth removed most of it). Watch: 232 u slivers at narrow key tips on MMJ (key-off view only).
+
 **What a new user trips over (seen in this session):**
 - Many steps whose ORDER matters; two knockout buttons can fail or remove art (the key must NOT cut inks
   on tonal files - now guarded when Tonal inks is on).
