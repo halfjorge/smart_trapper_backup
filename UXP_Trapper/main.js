@@ -9,6 +9,9 @@ const ORIGINAL_FLATTENED_LAYER_NAME = "__ORIGINAL_FLATTENED__";
 // colour. That never worked (always "missing") and was slow; the engine now
 // writes mask_colors.json itself. Set to true to try the old way again.
 const PANEL_COLOR_SAMPLING_ON_RUN = false;
+// Shared (co-worker) copy: set to false to hide the four individual step buttons, so the only
+// way to trap is the one "Run Trapper" button. Sara's own copy keeps them (true).
+const SHOW_INDIVIDUAL_STEPS = true;
 const DEFAULT_JOB_FOLDER = "C:\\Users\\Valued Customer\\Desktop\\TrapJobs";
 const DEFAULT_LOG_FOLDER = "C:\\Users\\Valued Customer\\Desktop\\trapper\\UXP_Trapper\\status_logs";
 
@@ -131,11 +134,18 @@ function panelMarkup() {
 
       <div class="panel">
         <div class="section-title">Actions</div>
+        <div class="field-label" style="margin-top:2px;">Optional, before Run Trapper</div>
         <button id="cleanColorsBtn" class="button secondary full" title="Optional: refills every solid colour layer (and the key) with its majority colour to remove off-colour specks. Skips paper, overlay and gray layers. One Ctrl+Z undoes it.">Clean Colors</button>
         <div class="field-help">Optional, run before Run Trapper. Refills every solid colour layer and the key with its majority colour, like Ctrl-clicking the layer and filling it. Skips the paper (bottom) layer, overlay layers and gray layers. Soft edges keep their transparency. One Ctrl+Z undoes it.</div>
-        <button id="manualKnockoutBtn" class="button secondary full">Manual Progressive Knockout</button>
         <button id="cutKeyBtn" class="button secondary full">Cut Top Key From Colors</button>
-        <button id="runBtn" class="button primary full">Run Trapper</button>
+        <button id="runAllBtn" class="button primary full" style="margin-top:12px;" title="Does the whole job in order: Progressive Knockout, trap, build the COLOR__ groups and CLEAN layers, import the traps. Stops with a plain message if anything goes wrong.">Run Trapper</button>
+        <div class="field-help">Does the whole job in order: 1 Progressive Knockout (skipped when Tonal inks is ticked), 2 make the traps, 3 build the COLOR__ groups and CLEAN layers, 4 import the traps. It checks the file and the helper first, and stops with a plain message if a step goes wrong.</div>
+      </div>
+
+      <div class="panel" id="individualStepsPanel" style="${SHOW_INDIVIDUAL_STEPS ? "" : "display:none;"}">
+        <div class="section-title">Individual steps (for testing)</div>
+        <button id="manualKnockoutBtn" class="button secondary full">Manual Progressive Knockout</button>
+        <button id="runBtn" class="button secondary full">Run Trapper (engine only)</button>
         <button id="prepareImportBtn" class="button secondary full">Prepare Import Structure</button>
         <button id="importTrapsBtn" class="button secondary full">Import Traps</button>
       </div>
@@ -219,6 +229,7 @@ function createController(rootNode) {
       "testBridgeBtn",
       "saveSettingsBtn",
       "runBtn",
+      "runAllBtn",
       "manualKnockoutBtn",
       "cutKeyBtn",
       "fileCheckBanner",
@@ -259,12 +270,14 @@ function createController(rootNode) {
     } catch (e) {}
   }
 
+  let runProgressStepPrefix = "";   // set only while the combined Run Trapper is running
   function setRunProgress(value, label) {
     const pct = Math.max(0, Math.min(100, Math.round(Number(value || 0))));
     if (els.runProgressBar) {
       els.runProgressBar.value = pct;
     }
     if (els.runProgressLabel) {
+      if (runProgressStepPrefix) label = runProgressStepPrefix + (label ? (": " + String(label)) : "");
       const suffix = label ? (" - " + String(label)) : "";
       els.runProgressLabel.textContent = pct + "%" + suffix;
     }
@@ -1536,11 +1549,13 @@ function createController(rootNode) {
         "Elapsed ms: " + elapsedMs(startMs) + "\n\n" +
         "Next step: run 'Run Trapper' normally."
       );
+      return { ok: true, operations: Number(result.operations || 0) };
     } catch (e) {
       appendStatus("Manual progressive knockout failed.\n" + String(e));
       try {
         if (e && e.stack) appendStatus("Manual progressive knockout stack:\n" + String(e.stack));
       } catch (stackErr) {}
+      return { ok: false, reason: String(e) };
     }
   }
 
@@ -3389,13 +3404,13 @@ function createController(rootNode) {
 
     if (!doc) {
       appendStatus("No active document. Open the target PSD before importing traps.");
-      return;
+      return { ok: false, reason: "No document is open." };
     }
 
     await ensureCurrentJobFolderEntry();
     if (!currentJobFolderEntry) {
       appendStatus("No job folder selected. Select a completed job folder before importing traps.");
-      return;
+      return { ok: false, reason: "No job folder." };
     }
 
     let trapsObj = null;
@@ -3403,7 +3418,7 @@ function createController(rootNode) {
       trapsObj = await readJsonFile(currentJobFolderEntry, "traps.json");
     } catch (e) {
       appendStatus("Could not read traps.json from the selected folder.\n\n" + String(e));
-      return;
+      return { ok: false, reason: "Could not read traps.json: " + String(e) };
     }
 
     appendStatus(statusStamp("Import Traps"));
@@ -3421,11 +3436,11 @@ function createController(rootNode) {
         "mask_colors.json is missing for the currently selected job folder.\n" +
         "Run Trapper first and import from that exact run folder."
       );
-      return;
+      return { ok: false, reason: "mask_colors.json is missing from the job folder." };
     }
     if (!traps.length) {
       appendStatus("No traps to import: the engine made 0 traps for this run.\n" + zeroTrapsHelp());
-      return;
+      return { ok: false, reason: "The engine made 0 traps." };
     }
 
     appendStatus("Beginning trap import...\nTrap count: " + traps.length);
@@ -3642,6 +3657,7 @@ function createController(rootNode) {
     } catch (e) {
       appendStatus("Post-import visibility cleanup warning:\n" + String(e));
     }
+    return { ok: true, total: traps.length, placed: placedCount, failed: failedCount };
   }
 
   async function prepareImportStructure() {
@@ -3654,7 +3670,7 @@ function createController(rootNode) {
 
     if (!doc) {
       appendStatus("No active document. Open the target PSD before preparing import structure.");
-      return;
+      return { ok: false, reason: "No document is open." };
     }
 
     await ensureCurrentJobFolderEntry();
@@ -3663,12 +3679,13 @@ function createController(rootNode) {
     const layers = inference.entries;
     if (layers.length < 3) {
       appendStatus("PSD needs at least 3 top-level layers (KEY top, PAPER bottom, colors in between).");
-      return;
+      return { ok: false, reason: "The file needs at least 3 layers: key on top, paper at the bottom, colours in between." };
     }
 
     const lines = [];
     let wrapped = 0;
     let skipped = 0;
+    const prepWarnings = [];
 
     lines.push(statusStamp("Prepare Import Structure"));
     lines.push("");
@@ -3746,6 +3763,7 @@ function createController(rootNode) {
         wrapped += 1;
       } catch (e) {
         lines.push("Wrap failed: " + layer.name + " :: " + String(e));
+        prepWarnings.push("Could not put layer '" + layer.name + "' into its COLOR__ group.");
       }
     }
 
@@ -3762,6 +3780,7 @@ function createController(rootNode) {
       lines.push("  skipped: Preflight cleanup is off");
     } else if (!currentJobFolderEntry) {
       lines.push("  skipped: no selected job folder");
+      prepWarnings.push("CLEAN layers were not built: no job folder.");
     } else {
       const maskColorsEntry = await getEntryByRelativePath(currentJobFolderEntry, "mask_colors.json");
       if (!maskColorsEntry) {
@@ -3784,7 +3803,7 @@ function createController(rootNode) {
           lines.push("  [" + item.index + "] " + item.name + " | layerSection=" + item.layerSection);
         }
         appendStatus(lines.join("\n"));
-        return;
+        return { ok: false, reason: "mask_colors.json is missing from the job folder, so the CLEAN layers could not be built." };
       }
 
       const maskColors = await readOptionalJsonFile(currentJobFolderEntry, "mask_colors.json") || {};
@@ -3820,10 +3839,12 @@ function createController(rootNode) {
           } else {
             cleanSkipped += 1;
             lines.push("  CLEAN skip " + sourceName + ": " + ((cleanResult && cleanResult.message) || "unknown"));
+            prepWarnings.push("No CLEAN layer for '" + sourceName + "': " + ((cleanResult && cleanResult.message) || "unknown"));
           }
         } catch (e) {
           cleanSkipped += 1;
           lines.push("  CLEAN error " + sourceName + ": " + String(e));
+          prepWarnings.push("No CLEAN layer for '" + sourceName + "': " + String(e));
         }
       }
       lines.push("  CLEAN built: " + cleanBuilt);
@@ -3852,6 +3873,7 @@ function createController(rootNode) {
       lines.push("  [" + item.index + "] " + item.name + " | layerSection=" + item.layerSection);
     }
     appendStatus(lines.join("\n"));
+    return { ok: true, wrapped, skipped, warnings: prepWarnings };
   }
 
   async function createJobFolderSkeleton() {
@@ -4343,12 +4365,204 @@ function createController(rootNode) {
         try { updateFileCheckBanner(); } catch (e) {}
         setRunProgress(100, "Complete");
       }
+      return {
+        ok: !!(response.ok && parsed && parsed.ok),
+        reason: (parsed && parsed.message) ? String(parsed.message) : ("Helper replied " + response.status + " " + response.statusText),
+        trapCount,
+        jobFolder: resolvedJobFolder
+      };
     } catch (e) {
       setRunProgress(100, "Failed");
       appendStatus("Run Trapper failed.\n" + String(e));
       try {
         if (e && e.stack) appendStatus("Run Trapper stack:\n" + String(e.stack));
       } catch (e2) {}
+      return { ok: false, reason: String(e) };
+    }
+  }
+
+  // ---- Run Trapper: the whole job in one click (2026-10-26) ----
+  // Runs Sara's usual order: Manual Progressive Knockout -> Run Trapper (engine) -> Prepare Import
+  // Structure -> Import Traps, by calling the very same four step functions the individual buttons
+  // use (same settings, same results). Checks the file and the helper before touching anything,
+  // skips the knockout when Tonal inks is ticked (grayscale inks are not cut under each other), and
+  // stops at the first step that fails with a plain message saying what has already been done.
+  let runAllBusy = false;
+
+  async function showPanelAlert(message) {
+    try {
+      if (app && typeof app.showAlert === "function") {
+        await app.showAlert(String(message));
+        return;
+      }
+    } catch (e) {}
+    try { window.alert(String(message)); } catch (e) {}
+  }
+
+  async function runAllSteps() {
+    if (runAllBusy) return;
+    runAllBusy = true;
+    if (els.runAllBtn) els.runAllBtn.disabled = true;
+    const startMs = nowMs();
+    const done = [];        // what has already been changed in the document
+    const warnings = [];    // problems that did not stop the run but need a look
+
+    const stop = async (where, why, fix) => {
+      const lines = ["RUN TRAPPER STOPPED - " + where, "", why];
+      if (fix) lines.push("", "What to do: " + fix);
+      lines.push("");
+      if (done.length) {
+        lines.push("Already done to this file: " + done.join(", ") + ".",
+          "To undo, step back in the History panel to before Run Trapper.");
+      } else {
+        lines.push("Nothing in your file has been changed.");
+      }
+      const text = lines.join("\n");
+      runProgressStepPrefix = "";
+      setRunProgress(100, "Stopped (" + where + ")");
+      appendStatus(text);
+      await showPanelAlert(text);
+      return { ok: false, where, why };
+    };
+
+    try {
+      appendStatus(statusStamp("Run Trapper (all steps)"));
+      runProgressStepPrefix = "Checking";
+      setRunProgress(0, "file");
+
+      // ---- Checks (nothing is changed) ----
+      let doc = null;
+      try { doc = app.activeDocument; } catch (e) { doc = null; }
+      if (!doc) {
+        return await stop("checks", "No document is open.", "Open the poster file, then click Run Trapper again.");
+      }
+      const entries = getTopLevelEntriesExcludingSnapshot(doc).entries || [];
+      const trapperLayers = entries.filter((en) => /^(COLOR__|CLEAN__|TRAP__)/.test(String((en.meta && en.meta.name) || "")));
+      if (trapperLayers.length) {
+        return await stop("checks",
+          "This file already has trapper layers (" + trapperLayers.slice(0, 3).map((en) => en.meta.name).join(", ") +
+          (trapperLayers.length > 3 ? ", ..." : "") + "), so it looks like it has been trapped already.",
+          "Open the original, untrapped file (or step back in History to before the last run), then click Run Trapper again.");
+      }
+      const visibleArt = entries.filter((en) => en.meta && en.meta.visible && en.meta.kind !== "group");
+      if (visibleArt.length < 3) {
+        return await stop("checks",
+          "The file needs at least 3 visible layers: the key on top, the paper at the bottom and the colours in between (found " + visibleArt.length + ").",
+          "Check the layer order and visibility, then click Run Trapper again.");
+      }
+      const settings = getSettings();
+      const fileIssues = fileFormatProblems(doc);
+      if (fileIssues.length) {
+        return await stop("checks", "The file is not set up the way the trapper expects:\n" + fileIssues.join("\n"),
+          "Fix the file, then click Run Trapper again.");
+      }
+      const settingIssues = settingsProblems(settings);
+      if (settingIssues.length) {
+        return await stop("checks", "A setting looks wrong:\n" + settingIssues.join("\n"),
+          "Correct the setting, then click Run Trapper again.");
+      }
+      let overlayNames = [];
+      try { overlayNames = overlayLayerNames(doc) || []; } catch (e) { overlayNames = []; }
+      if (overlayNames.length && !settings.overlayLayers) {
+        return await stop("checks",
+          "This file has transparent / overlay layers (" + overlayNames.join(", ") + "), but 'File has transparent / overlay layers' is not ticked. " +
+          "Without it the knockout would cut colours out from under those layers and change how the poster prints.",
+          "Tick 'File has transparent / overlay layers', then click Run Trapper again.");
+      }
+
+      setRunProgress(0, "helper");
+      const bridgeBase = String(settings.bridgeUrl || "").replace(/\/$/, "");
+      let health = null;
+      try {
+        const resp = await fetch(bridgeBase + "/health");
+        health = JSON.parse(await resp.text());
+      } catch (e) {
+        health = null;
+      }
+      if (!health || !health.ok) {
+        return await stop("checks", "The Smart Trapper helper program is not running (no answer from " + bridgeBase + ").",
+          "Start the Smart Trapper helper, then click Run Trapper again.");
+      }
+      if (health.engineExists === false) {
+        return await stop("checks", "The helper is running but the trapping engine program is missing:\n" + String(health.enginePath || ""),
+          "The install is incomplete - the engine needs to be installed.");
+      }
+
+      // ---- Step 1: Progressive Knockout ----
+      runProgressStepPrefix = "Step 1 of 4";
+      if (settings.tonalInks) {
+        setRunProgress(0, "knockout skipped (Tonal inks)");
+        appendStatus("Step 1 of 4 - Progressive Knockout: SKIPPED because Tonal inks is ticked (grayscale inks are not cut under each other).");
+      } else {
+        setRunProgress(0, "knockout");
+        done.push("Progressive Knockout");
+        const k = await runManualProgressiveKnockout();
+        if (!k || !k.ok) {
+          return await stop("Step 1 of 4, Progressive Knockout",
+            "The knockout hit an error (part of it may already be done):\n" + ((k && k.reason) || "unknown error"),
+            "Step back in History to before Run Trapper, check the layers, then try again. If it keeps happening, click Save Status Snapshot and send it to Sara.");
+        }
+      }
+
+      // ---- Step 2: trap (engine) ----
+      runProgressStepPrefix = "Step 2 of 4";
+      done.push("hidden " + ORIGINAL_FLATTENED_LAYER_NAME + " layer");
+      const r = await runTrapper();
+      if (!r || !r.ok) {
+        return await stop("Step 2 of 4, making the traps", "The trapping engine did not finish:\n" + ((r && r.reason) || "unknown error"),
+          "Click Save Status Snapshot and send it to Sara.");
+      }
+      if (r.trapCount === 0) {
+        return await stop("Step 2 of 4, making the traps", "The engine made 0 traps, so there is nothing to import.\n" + zeroTrapsHelp(), "");
+      }
+
+      // ---- Step 3: Prepare Import Structure ----
+      runProgressStepPrefix = "Step 3 of 4";
+      setRunProgress(0, "building COLOR__ groups and CLEAN layers");
+      done.push("COLOR__ groups / CLEAN layers");
+      const p = await prepareImportStructure();
+      if (!p || !p.ok) {
+        return await stop("Step 3 of 4, building the COLOR__ groups", (p && p.reason) || "unknown error",
+          "Click Save Status Snapshot and send it to Sara.");
+      }
+      (p.warnings || []).forEach((w) => warnings.push(w));
+
+      // ---- Step 4: Import Traps ----
+      runProgressStepPrefix = "Step 4 of 4";
+      setRunProgress(0, "importing traps");
+      done.push("trap layers");
+      const im = await importTraps();
+      if (!im || !im.ok) {
+        return await stop("Step 4 of 4, importing the traps", (im && im.reason) || "unknown error",
+          "Click Save Status Snapshot and send it to Sara.");
+      }
+      if (im.failed > 0) warnings.push(im.failed + " of " + im.total + " trap layers could not be imported (see the status box).");
+
+      runProgressStepPrefix = "";
+      const secs = Math.round(elapsedMs(startMs) / 1000);
+      const lines = [
+        warnings.length ? "RUN TRAPPER FINISHED - WITH WARNINGS" : "RUN TRAPPER FINISHED",
+        "",
+        "Progressive Knockout: " + (settings.tonalInks ? "skipped (Tonal inks)" : "done"),
+        "Traps imported: " + im.placed + " of " + im.total,
+        "Time: " + secs + " s"
+      ];
+      if (warnings.length) {
+        lines.push("", "Please check before printing:");
+        warnings.forEach((w) => lines.push("- " + w));
+      }
+      const text = lines.join("\n");
+      setRunProgress(100, warnings.length ? "Done - with warnings" : "Done");
+      appendStatus(text);
+      await showPanelAlert(text);
+      return { ok: true, warnings };
+    } catch (e) {
+      try { if (e && e.stack) appendStatus("Run Trapper (all steps) stack:\n" + String(e.stack)); } catch (e2) {}
+      return await stop("unexpected error", String(e), "Click Save Status Snapshot and send it to Sara.");
+    } finally {
+      runProgressStepPrefix = "";
+      runAllBusy = false;
+      if (els.runAllBtn) els.runAllBtn.disabled = false;
     }
   }
 
@@ -4437,6 +4651,7 @@ function createController(rootNode) {
     bindActionWithCompletionAlert(els.cutKeyBtn, "Cut Top Key From Colors", runCutTopKeyKnockout);
     bindActionWithCompletionAlert(els.cleanColorsBtn, "Clean Colors", runCleanColors);
     bindActionWithCompletionAlert(els.runBtn, "Run Trapper", runTrapper);
+    bindClick(els.runAllBtn, runAllSteps);
   }
 
   async function init() {

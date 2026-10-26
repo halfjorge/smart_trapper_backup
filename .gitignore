@@ -40,3 +40,6 @@ Thumbs.db
 _BACKUP_*/
 _claude_test_scripts.zip
 **/*.exe
+
+# Shared (co-worker) copy made by tools/dev/make_shared_copy.py
+dist/

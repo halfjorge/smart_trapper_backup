@@ -26,6 +26,33 @@ all traps.
   included.
 - **Hand:** Sara's hand-trapped after file, measured the same way.
 
+## 2026-10-26 - One-button "Run Trapper" (panel only, stand-in Photoshop)
+Tool: `tools/ui_tests/run_trapper_button_test.js` - the real panel in Chromium, Photoshop stood in,
+REAL helper (real_bridge.py) + REAL engine (built from the cloud kit) on small test jobs. Run on Sara's
+copy and on the co-worker's copy (made by make_shared_copy.py): identical results.
+
+| Situation | Steps that ran | Result |
+|---|---|---|
+| Normal file | knockout, engine, prepare, import | FINISHED (engine made 2 traps) |
+| Tonal inks ticked | engine, prepare, import | FINISHED, knockout skipped |
+| Overlay layer, box ticked | all four | FINISHED |
+| Overlay layer, box NOT ticked | none | STOPPED before anything changed |
+| No document / only 2 layers / already trapped | none | STOPPED before anything changed |
+| Helper not running | none | STOPPED before anything changed (knockout NOT done) |
+| 600 ppi / CMYK / Trap width 0 | none | STOPPED before anything changed |
+| Knockout error | knockout | STOPPED at step 1, says knockout may be partly done |
+| Engine error (broken job) | knockout, engine | STOPPED at step 2 ("Engine run failed") |
+| Engine makes 0 traps | knockout, engine | STOPPED at step 2 with the 0-traps help |
+| A colour gets no CLEAN layer | all four | FINISHED - WITH WARNINGS, names the colour |
+| 1 of 3 trap layers fails to import | all four | FINISHED - WITH WARNINGS |
+| A step throws unexpectedly | up to the failing step | STOPPED, lists what was already done |
+| Double-click while running | all four, once | one run only |
+
+Individual buttons (Sara's copy): each still calls only its own step and shows its usual
+"... complete." pop-up; engine-only run made 2 traps. Code check: the only lines removed from main.js
+are 8 bare `return;` lines (now `return { ok, reason }`) and two button labels/positions.
+Not tested here: real Photoshop (Sara: Reload and run a file you know).
+
 ## 2026-10-26 - "Tonal inks (grayscale layers)" in the engine + panel (new option, default off)
 | Check | Result |
 |---|---|

@@ -1,6 +1,6 @@
 # PROJECT NOTES - Smart Trapper (start here in a new chat)
 
-Last updated: 2026-10-09 10:40 (handoff to a new chat for MEDIUM files) by Claude. Owner: Sara (The Half and Half, screen-print shop).
+Last updated: 2026-10-26 14:30 (UI / workflow: one-button Run Trapper, two versions) by Claude. Owner: Sara (The Half and Half, screen-print shop).
 
 **New chat? Read section 0 (Next session) first, then the rest of this file, then `TRAP_RULES_NOTES.md` (the agreed trapping rules) and
 `CHANGES_2026-10-06.md` (what was changed and why).** Sections 9-11 below cover git, how to make a
@@ -19,6 +19,53 @@ out of date.
 **Sara's goal now:** make the panel easy for ANOTHER person to use efficiently, without Sara's knowledge
 of building and testing it. The backend (engine + trap rules) is in a good place; the work is UI and workflow.
 Talk it through with Sara first and agree a plan before changing the panel.
+
+**AGREED PLAN (Sara, 2026-10-26).** The other person is a co-worker in Sara's shop on a **Mac (macOS 26.5.1,
+Photoshop 27.4.0)**, USING only (never building/testing). Four file types are right to start: Standard
+poster, Geometric / flat shapes, Overlay / Multiply layers, Tonal / grayscale. Order:
+1. DONE 2026-10-26: one-button **Run Trapper** (below).
+2. NEXT: "What kind of file is this?" picker (4 types + Custom). Each type only sets the existing tick
+   boxes/numbers; confirm each type's exact values with Sara before building (she has not confirmed the
+   values yet - proposal: Standard = trap 5, preflight on, alpha 90, edge bias 1, key pullback 1, colour
+   pullback 0, round ON; Geometric = same with Round OFF and Key traps follow visible OFF; Overlay =
+   Standard + overlay box; Tonal = Tonal inks ON). Then a check-only "Check file" button.
+3. Mac install for the co-worker: folders not hard-wired to Sara's PC (DEFAULT_JOB_FOLDER/LOG_FOLDER are
+   `C:\Users\Valued Customer\...`; the folder pickers are hidden), packaged plugin (.ccx) instead of UXP
+   Developer Tool, engine pre-built for Mac (no Rust), helper started by double-click, plain message when
+   it isn't running. SHARE_README_WINDOWS_MAC.txt and build_smart_trapper_bundle.py are from the OLD JSX
+   version - don't reuse them as they are.
+4. Tidy labels / fold advanced settings away, one-page user guide.
+
+**TWO VERSIONS (keep them separate and clean - Sara's condition):**
+- ONE panel source in git: `UXP_Trapper/main.js` = **Sara's copy** (SHOW_INDIVIDUAL_STEPS = true).
+- The **co-worker's ("shared") copy** is MADE from it by `tools/dev/make_shared_copy.py` (output
+  `dist/SmartTrapper_Shared/`, not in git). Never edit the shared copy by hand. Every difference lives in
+  that script's CHANGES list and in this table:
+
+  | | Sara's copy | Co-worker's copy |
+  |---|---|---|
+  | Run Trapper (all four steps), Clean Colors, Cut Top Key | yes | yes |
+  | "Individual steps (for testing)": Manual Progressive Knockout, Run Trapper (engine only), Prepare Import Structure, Import Traps | yes | hidden (`SHOW_INDIVIDUAL_STEPS = false`) |
+  | Settings, checks, engine, helper | same | same |
+- Same engine and helper for both. A print-output change always applies to both.
+
+**One-button Run Trapper (panel only, 2026-10-26, Sara OK'd).** Button id `runAllBtn`, function
+`runAllSteps()` in main.js. Runs Sara's order by calling the SAME step functions as the individual
+buttons: Manual Progressive Knockout -> Run Trapper (engine; `runTrapper()`) -> Prepare Import Structure ->
+Import Traps. Each step function now returns `{ ok, reason, ... }` (the individual buttons ignore it, so
+they behave as before). Print output identical to clicking the four by hand.
+- Knockout SKIPPED when Tonal inks is ticked (Sara: grayscale builds are not knocked out).
+- Full STOPS before anything changes (Sara: "stop is good"): no document / under 3 visible layers; file
+  already has COLOR__/CLEAN__/TRAP__ layers; helper not answering /health or engine missing; not RGB or not
+  300 ppi; risky settings (settingsProblems); overlay layers found while "File has transparent / overlay
+  layers" is off.
+- Stops after a failed step (knockout error, engine not ok, 0 traps, prepare/import fatal) with which step,
+  what was already done to the file, and "step back in History". Non-fatal problems (missing CLEAN layer,
+  trap layer not imported, wrap failure) finish as "FINISHED - WITH WARNINGS" with a list. One alert only.
+- The old engine-only button is labelled "Run Trapper (engine only)" in Sara's copy.
+- Tested offline (TEST_RESULTS 2026-10-26 "One-button Run Trapper"): tools/ui_tests (stand-in Photoshop,
+  real helper + engine), 18 situations + the 4 individual buttons, on both copies.
+- Backup: versions\main_backup_2026-10-26_before_run_trapper_button.js. Sara: click Reload.
 
 **What exists today (all on branch trapper_2026_10, live copy = Sara's Desktop\trapper):**
 - Panel `UXP_Trapper/main.js` (UXP, loaded in UXP Developer Tool; panel change = Reload). Sections:
@@ -604,6 +651,11 @@ README inside the zip.
 
    Then run `node --check main.js`. After a panel change, Sara clicks Reload; after an engine
    change, she runs the .bat first.
+   - Step functions (`runManualProgressiveKnockout`, `runTrapper`, `prepareImportStructure`,
+     `importTraps`) must keep returning `{ ok, reason }`: the one-button Run Trapper relies on it.
+   - Anything that should differ in the co-worker's copy goes in `tools/dev/make_shared_copy.py`
+     (and the TWO VERSIONS table in section 0), never as a hand edit to a copy.
+   - Panel tests without Photoshop: `tools/ui_tests/` (README there).
 5. **Test** against the Trap Examples (section 11). Report what changed with all layers on, and
    any new butt joins.
 6. **Update the docs** (and add a dated section to `TEST_RESULTS.md` for any test run):
