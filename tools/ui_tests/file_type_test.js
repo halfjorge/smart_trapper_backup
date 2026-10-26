@@ -4,7 +4,7 @@ const OUT = process.argv[2] || '/home/claude/work/out';
 const TYPE_VALUES = {
   standard: { fullDebug: false, preflightCleanup: true, roundTraps: true, closeKeyHalo: false, overlayLayers: false, smoothKeyTraps: false, bevelKeyCorners: false, keyTrapsFollowVisible: false, tonalInks: false, alphaThreshold: 90, edgeBiasPx: 1, keyTrapPullbackPx: 1, colorTrapPullbackPx: 0, trapPx: 5 },
 };
-TYPE_VALUES.geometric = Object.assign({}, TYPE_VALUES.standard, { roundTraps: false, keyTrapsFollowVisible: false, smoothKeyTraps: true, bevelKeyCorners: true });
+TYPE_VALUES.geometric = Object.assign({}, TYPE_VALUES.standard, { roundTraps: false, keyTrapsFollowVisible: false, smoothKeyTraps: true, bevelKeyCorners: false });
 TYPE_VALUES.overlay = Object.assign({}, TYPE_VALUES.standard, { overlayLayers: true });
 TYPE_VALUES.tonal = Object.assign({}, TYPE_VALUES.standard, { tonalInks: true });
 const KEYS = Object.keys(TYPE_VALUES.standard);

@@ -1,6 +1,6 @@
 # PROJECT NOTES - Smart Trapper (start here in a new chat)
 
-Last updated: 2026-10-26 14:30 (UI / workflow: one-button Run Trapper, two versions) by Claude. Owner: Sara (The Half and Half, screen-print shop).
+Last updated: 2026-10-26 14:45 (UI / workflow: one-button Run Trapper, file-type picker, two versions) by Claude. Owner: Sara (The Half and Half, screen-print shop).
 
 **New chat? Read section 0 (Next session) first, then the rest of this file, then `TRAP_RULES_NOTES.md` (the agreed trapping rules) and
 `CHANGES_2026-10-06.md` (what was changed and why).** Sections 9-11 below cover git, how to make a
@@ -24,11 +24,9 @@ Talk it through with Sara first and agree a plan before changing the panel.
 Photoshop 27.4.0)**, USING only (never building/testing). Four file types are right to start: Standard
 poster, Geometric / flat shapes, Overlay / Multiply layers, Tonal / grayscale. Order:
 1. DONE 2026-10-26: one-button **Run Trapper** (below).
-2. NEXT: "What kind of file is this?" picker (4 types + Custom). Each type only sets the existing tick
-   boxes/numbers; confirm each type's exact values with Sara before building (she has not confirmed the
-   values yet - proposal: Standard = trap 5, preflight on, alpha 90, edge bias 1, key pullback 1, colour
-   pullback 0, round ON; Geometric = same with Round OFF and Key traps follow visible OFF; Overlay =
-   Standard + overlay box; Tonal = Tonal inks ON). Then a check-only "Check file" button.
+2. DONE 2026-10-26: "What kind of file is this?" picker (below). NEXT after it: a check-only
+   "Check file" button (plain warnings: names with spaces, empty/hidden layers, key/paper shown,
+   overlay/tonal detection -> suggest a file type). Not started; agree with Sara first.
 3. Mac install for the co-worker: folders not hard-wired to Sara's PC (DEFAULT_JOB_FOLDER/LOG_FOLDER are
    `C:\Users\Valued Customer\...`; the folder pickers are hidden), packaged plugin (.ccx) instead of UXP
    Developer Tool, engine pre-built for Mac (no Rust), helper started by double-click, plain message when
@@ -46,7 +44,7 @@ poster, Geometric / flat shapes, Overlay / Multiply layers, Tonal / grayscale. O
   |---|---|---|
   | Run Trapper (all four steps), Clean Colors, Cut Top Key | yes | yes |
   | "Individual steps (for testing)": Manual Progressive Knockout, Run Trapper (engine only), Prepare Import Structure, Import Traps | yes | hidden (`SHOW_INDIVIDUAL_STEPS = false`) |
-  | Settings, checks, engine, helper | same | same |
+  | Settings, file-type picker, checks, engine, helper | same | same |
 - Same engine and helper for both. A print-output change always applies to both.
 
 **One-button Run Trapper (panel only, 2026-10-26, Sara OK'd).** Button id `runAllBtn`, function
@@ -66,6 +64,28 @@ they behave as before). Print output identical to clicking the four by hand.
 - Tested offline (TEST_RESULTS 2026-10-26 "One-button Run Trapper"): tools/ui_tests (stand-in Photoshop,
   real helper + engine), 18 situations + the 4 individual buttons, on both copies.
 - Backup: versions\main_backup_2026-10-26_before_run_trapper_button.js. Sara: click Reload.
+
+**"What kind of file is this?" picker (panel only, 2026-10-26, Sara confirmed the values).** Drop-down
+`fileType` at the top of Run Settings; `FILE_TYPES` near the top of main.js. Picking a type only fills in
+the existing settings; every box stays adjustable ("ADJUSTED from <type>" note lists the changes, "Put
+back <type> settings" button). `fileType` is saved with the settings but NOT sent to the engine
+(job.json built field by field; tested identical to ticking the boxes by hand).
+| Type | Values (all others off) |
+|---|---|
+| Standard poster | trap 5, Preflight cleanup ON, alpha 90, edge bias 1, key pullback 1, colour pullback 0, Round ON |
+| Geometric / flat shapes | Standard but Round OFF, Key traps follow visible OFF, Smooth ON, **Bevel OFF** |
+| Overlay / Multiply layers | Standard + File has transparent / overlay layers |
+| Tonal / grayscale | Standard + Tonal inks |
+| Custom | changes nothing |
+- Geometric Bevel OFF (Sara 2026-10-26): on the approved Obey file the mitre pass filled back the 561 px /
+  134 square corners that Bevel had cut; Sara wants inside corners square.
+- Fresh install (no saved settings) starts on Standard poster - this is the co-worker's default. Saved
+  settings are never replaced: the picker shows the type they match, else Custom (Sara at alpha 89 = Custom).
+  DEFAULTS itself is unchanged (only used for empty boxes / very old saved settings).
+- Run Trapper's finish message names the type ("Standard poster (adjusted)"); the overlay stop message
+  says to pick Overlay / Multiply.
+- Tests: tools/ui_tests/file_type_test.js (27 checks) on both copies; Run Trapper suite unchanged.
+  Backup: versions\main_backup_2026-10-26_before_file_type_picker.js.
 
 **What exists today (all on branch trapper_2026_10, live copy = Sara's Desktop\trapper):**
 - Panel `UXP_Trapper/main.js` (UXP, loaded in UXP Developer Tool; panel change = Reload). Sections:

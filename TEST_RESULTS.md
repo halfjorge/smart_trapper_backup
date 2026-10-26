@@ -26,6 +26,20 @@ all traps.
   included.
 - **Hand:** Sara's hand-trapped after file, measured the same way.
 
+## 2026-10-26 - "What kind of file is this?" picker (panel only, stand-in Photoshop)
+Tool: `tools/ui_tests/file_type_test.js` (after run_trapper_button_test.js). 27 checks, all PASS, on
+Sara's copy and on the co-worker's copy:
+- Fresh install starts on Standard poster with Standard values.
+- Each type fills in exactly its values, is saved and survives Reload; bridge URL / folders untouched.
+- Changing boxes after picking: type kept, note lists the changes ("Trap width 6 (usual 5)"), values
+  saved; "Put back" restores the type; clicking a setting's name also updates the note.
+- Custom changes nothing.
+- Saved settings never replaced: Obey-style settings show as Geometric with values unchanged; alpha 89
+  shows as Custom with values unchanged; very old saved settings keep newer boxes off.
+- job.json from picking each type == job.json from ticking the same boxes by hand (no fileType in it).
+  Geometric: trapShape square, smooth on, bevel off, follow-visible off.
+Run Trapper suite (18 situations + individual buttons): same results as before.
+
 ## 2026-10-26 - One-button "Run Trapper" (panel only, stand-in Photoshop)
 Tool: `tools/ui_tests/run_trapper_button_test.js` - the real panel in Chromium, Photoshop stood in,
 REAL helper (real_bridge.py) + REAL engine (built from the cloud kit) on small test jobs. Run on Sara's
