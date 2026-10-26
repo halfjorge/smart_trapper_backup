@@ -27,7 +27,14 @@ poster, Geometric / flat shapes, Overlay / Multiply layers, Tonal / grayscale. O
 2. DONE 2026-10-26: "What kind of file is this?" picker (below). NEXT after it: a check-only
    "Check file" button (plain warnings: names with spaces, empty/hidden layers, key/paper shown,
    overlay/tonal detection -> suggest a file type). Not started; agree with Sara first.
-3. Mac install for the co-worker: folders not hard-wired to Sara's PC (DEFAULT_JOB_FOLDER/LOG_FOLDER are
+2b. DRAFT 2026-10-26: user guide PDF with pictures for every setting, `docs/user_guide/` (README there).
+   Pictures = REAL engine on small test drawings, setting off vs on (Sara: "can you generate them?
+   I don't want to run the trapper over and over"). Waiting for Sara's review; Mac install page is a
+   placeholder until the package exists. To go in the install package.
+3. Mac install for the co-worker (Sara 2026-10-26: co-worker has the Claude desktop app on this account,
+   so this chat can be linked to the Mac to test the install there; NO paid Apple developer account ->
+   one-time System Settings > Privacy & Security > "Open Anyway"; Sara will put the installer on the
+   co-worker's Desktop; helper should start by itself at login): folders not hard-wired to Sara's PC (DEFAULT_JOB_FOLDER/LOG_FOLDER are
    `C:\Users\Valued Customer\...`; the folder pickers are hidden), packaged plugin (.ccx) instead of UXP
    Developer Tool, engine pre-built for Mac (no Rust), helper started by double-click, plain message when
    it isn't running. SHARE_README_WINDOWS_MAC.txt and build_smart_trapper_bundle.py are from the OLD JSX
