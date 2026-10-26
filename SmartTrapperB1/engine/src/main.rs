@@ -1,6 +1,7 @@
 #![allow(non_snake_case, dead_code)]
 
 mod fast;
+mod tonal;
 
 use anyhow::{Context, Result};
 use clap::Parser;
@@ -109,6 +110,12 @@ struct JobFile {
     // never cut. Nothing visible changes when everything is in register.
     #[serde(default)]
     keyTrapsFollowVisible: bool,
+
+    // "Tonal inks (grayscale layers)" (Sara, 2026-10-26, DMB Fall Tour 2026). Off / missing = the
+    // original behaviour, unchanged. On: see tonal.rs - inks keep their tones, traps only under solid
+    // key line work with the ink's own tone carried from its edge, no ink-to-ink traps.
+    #[serde(default)]
+    tonalInks: bool,
 
     keyLayerName: String,
     paperLayerName: String,
@@ -577,6 +584,9 @@ fn main()->Result<()>{
     let n=(w as usize)*(h as usize);
 
     let trap_px=args.trap_px.unwrap_or(job.tolerance as i32).max(0) as u32;
+    if job.tonalInks {
+        return tonal::run(&job, &job_folder, trap_px, t0);
+    }
     let use_cleanup=job.preflightCleanup;
     let alpha_threshold=if use_cleanup {
         job.alphaThreshold.max(1)

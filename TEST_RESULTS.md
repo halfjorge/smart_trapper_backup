@@ -26,6 +26,14 @@ all traps.
   included.
 - **Hand:** Sara's hand-trapped after file, measured the same way.
 
+## 2026-10-26 - "Tonal inks (grayscale layers)" in the engine + panel (new option, default off)
+| Check | Result |
+|---|---|
+| DMB Tour job (tonalInks on) vs approved offline poster | identical: 0 of 5,460,779 trap px, CLEAN tones identical |
+| DMB Nash job, box off: old engine vs new engine | IDENTICAL (22 files) |
+| cargo test (vendored kit, offline) | 7 passed |
+| Engine time, DMB Tour 5400 x 7200 | 15 s |
+
 ## 2026-10-20 - DMB Fall Tour 2026: content-aware trapping of tonal inks (offline)
 Inks carry tone in alpha; trap 5 px @300 under SOLID key line work only (not stipple/specks), tone mirrored from
 the ink edge, lines split mid-way. Test crop approved by Sara, then full poster (tools/dmb_tour):

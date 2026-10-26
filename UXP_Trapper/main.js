@@ -25,6 +25,7 @@ const DEFAULTS = {
   smoothKeyTraps: false,
   bevelKeyCorners: false,
   keyTrapsFollowVisible: false,
+  tonalInks: false,
   trapPx: 5,
   bridgeUrl: "http://127.0.0.1:8765",
   jobFolder: DEFAULT_JOB_FOLDER,
@@ -91,6 +92,13 @@ function panelMarkup() {
             <span class="check-text" data-for="keyTrapsFollowVisible" style="color:#f2f2f2; opacity:1;">Key traps follow the colour you see</span>
           </div>
           <div class="field-help">Under the key, the colour you see right next to the key edge is put on top in the trap zone (up to the trap width), so that is the colour that shows if the key prints off register. Colours printed later are taken out there; a thin sliver (under 3 px) of a later colour between them counts as the colour it lies against (e.g. olive under a 1-2 px blue line). Nothing changes next to paper (key pullback), overlays are never cut, and nothing visible changes with all layers on. Leave off to keep traps exactly as before.</div>
+        </div>
+        <div class="setting-box" title="For files where every colour is a grayscale / textured layer (tones in the layer, soft edges, a stipple key), e.g. DMB Fall Tour 2026. Inks keep their tones. Traps go only under solid key line work (never under the stipple, paper specks or highlights), 5 px, split down the middle of a line between two inks, and each trap carries that ink's own tone and grain from its edge. No ink-to-ink traps; round / smooth / bevel / follow-visible / halo are not used. The key does not cut the inks (Progressive Knockout skips the key; Cut Top Key is blocked). Leave off for normal solid-colour files.">
+          <div class="check-row">
+            <input id="tonalInks" type="checkbox">
+            <span class="check-text" data-for="tonalInks" style="color:#f2f2f2; opacity:1;">Tonal inks (grayscale layers)</span>
+          </div>
+          <div class="field-help">For files where every colour is a grayscale / textured layer (tones in the layer, soft edges, a stipple key), e.g. DMB Fall Tour 2026. Inks keep their tones. Traps go only under solid key line work (never under the stipple, paper specks or highlights), 5 px, split down the middle of a line between two inks, and each trap carries that ink's own tone and grain from its edge. No ink-to-ink traps; round / smooth / bevel / follow-visible / halo are not used. The key does not cut the inks (Progressive Knockout skips the key; Cut Top Key is blocked). Leave off for normal solid-colour files.</div>
         </div>
           <div class="field-help">Where a trap under the key runs up to bare paper beside it (a gap in the key, e.g. a cream letter stroke), the end of the trap is cut into a bevel instead of a square corner sitting right against the paper. Traps across thin key lines keep their full width. Only traps under the key are touched, and nothing visible changes with all layers on. Leave off to keep traps exactly as before.</div>
         </div>
@@ -194,6 +202,7 @@ function createController(rootNode) {
       "smoothKeyTraps",
       "bevelKeyCorners",
       "keyTrapsFollowVisible",
+      "tonalInks",
       "alphaThreshold",
       "edgeBiasPx",
       "keyTrapPullbackPx",
@@ -320,6 +329,7 @@ function createController(rootNode) {
       smoothKeyTraps: !!els.smoothKeyTraps.checked,
       bevelKeyCorners: !!els.bevelKeyCorners.checked,
       keyTrapsFollowVisible: !!els.keyTrapsFollowVisible.checked,
+      tonalInks: !!els.tonalInks.checked,
       alphaThreshold: numberOr(els.alphaThreshold.value, DEFAULTS.alphaThreshold),
       edgeBiasPx: numberOr(els.edgeBiasPx.value, DEFAULTS.edgeBiasPx),
       keyTrapPullbackPx: numberOr(els.keyTrapPullbackPx.value, DEFAULTS.keyTrapPullbackPx),
@@ -341,6 +351,7 @@ function createController(rootNode) {
     els.smoothKeyTraps.checked = !!s.smoothKeyTraps;
     els.bevelKeyCorners.checked = !!s.bevelKeyCorners;
     els.keyTrapsFollowVisible.checked = !!s.keyTrapsFollowVisible;
+    els.tonalInks.checked = !!s.tonalInks;
     els.alphaThreshold.value = String(s.alphaThreshold);
     els.edgeBiasPx.value = String(s.edgeBiasPx);
     els.keyTrapPullbackPx.value = String(s.keyTrapPullbackPx);
@@ -615,6 +626,7 @@ function createController(rootNode) {
         smoothKeyTraps: !!getSettings().smoothKeyTraps,
         bevelKeyCorners: !!getSettings().bevelKeyCorners,
         keyTrapsFollowVisible: !!getSettings().keyTrapsFollowVisible,
+        tonalInks: !!getSettings().tonalInks,
         alphaThreshold: numberOr(getSettings().alphaThreshold, DEFAULTS.alphaThreshold),
         edgeBiasPx: numberOr(getSettings().edgeBiasPx, DEFAULTS.edgeBiasPx),
         keyTrapPullbackPx: numberOr(getSettings().keyTrapPullbackPx, DEFAULTS.keyTrapPullbackPx),
@@ -1422,6 +1434,9 @@ function createController(rootNode) {
     appendStatus("progressive knockout: Photoshop-side knockout start");
     appendStatus("  paper preserved: " + paper.meta.name);
     if (overlayMode) appendStatus("  overlay mode ON: overlay layers are not used to cut");
+    // Tonal inks (2026-10-26): the key's stipple prints OVER the inks, so the key must not cut them.
+    const tonalMode = !!getSettings().tonalInks;
+    if (tonalMode) appendStatus("  tonal inks ON: the key is not used to cut (its texture prints over the inks)");
 
     try {
         for (let sourceIdx = 0; sourceIdx < knockable.length - 1; sourceIdx += 1) {
@@ -1433,6 +1448,10 @@ function createController(rootNode) {
           // (batchPlay error -128). Nothing to cut with -> skip it (2026-10-21).
           if (layerHasNoPixels(source.layer)) {
             appendStatus("  skipped (no pixels left to cut with): " + source.meta.name);
+            continue;
+          }
+          if (tonalMode && sourceIdx === 0) {
+            appendStatus("  not cutting with the key: " + source.meta.name + " (tonal inks)");
             continue;
           }
           if (overlayMode && sourceIdx > 0 && isOverlayMeta(source.meta)) {
@@ -1945,6 +1964,9 @@ function createController(rootNode) {
       }
       if (!doc) {
         throw new Error("No active document. Open a document before cutting the top key from colors.");
+      }
+      if (getSettings().tonalInks) {
+        throw new Error("Tonal inks is on: the key's texture prints over the inks, so cutting the key out of the colours would remove tone under the stipple. Turn Tonal inks off to use this button.");
       }
       const startMs = nowMs();
       const result = await applyTopKeyKnockoutInPhotoshop(doc);
@@ -3664,6 +3686,7 @@ function createController(rootNode) {
         ", smoothKeyTraps=" + (!!settings.smoothKeyTraps) +
         ", bevelKeyCorners=" + (!!settings.bevelKeyCorners) +
         ", keyTrapsFollowVisible=" + (!!settings.keyTrapsFollowVisible) +
+        ", tonalInks=" + (!!settings.tonalInks) +
         ", alphaThreshold=" + settings.alphaThreshold +
         ", edgeBiasPx=" + settings.edgeBiasPx +
         ", keyTrapPullbackPx=" + settings.keyTrapPullbackPx +
@@ -4355,7 +4378,7 @@ function createController(rootNode) {
       });
     }
 
-    ["fullDebug", "preflightCleanup", "roundTraps", "closeKeyHalo", "overlayLayers", "smoothKeyTraps", "bevelKeyCorners", "keyTrapsFollowVisible", "alphaThreshold", "edgeBiasPx", "keyTrapPullbackPx", "colorTrapPullbackPx", "trapPx"].forEach((id) => {
+    ["fullDebug", "preflightCleanup", "roundTraps", "closeKeyHalo", "overlayLayers", "smoothKeyTraps", "bevelKeyCorners", "keyTrapsFollowVisible", "tonalInks", "alphaThreshold", "edgeBiasPx", "keyTrapPullbackPx", "colorTrapPullbackPx", "trapPx"].forEach((id) => {
       const el = els[id];
       if (!el) return;
       el.addEventListener("change", persistSettingsSilently);

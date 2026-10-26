@@ -14,7 +14,24 @@ out of date.
 
 ---
 
-## 0. NEXT SESSION STARTS HERE (update 2026-10-21)
+## 0. NEXT SESSION STARTS HERE (update 2026-10-26)
+
+**NEW in the app: "Tonal inks (grayscale layers)" tick box, default OFF (Sara OK'd 2026-10-26).**
+The DMB Fall Tour content-aware trapping is now in the engine (SmartTrapperB1/engine/src/tonal.rs, job.json
+`tonalInks`) and the panel (tick box, sent to job.json, shown in the Settings log line).
+- On: inks keep their tones (any alpha > 0 is ink); traps only under solid key line work (key 255, opened
+  cross x2, 1 px back from non-solid key) + the soft line edge on the ink side (key >= 50%, within 2 px of the
+  ink); 5 px square growth, all inks at once (line split mid-way); trap tone mirrored from inside the ink
+  (ties: leftmost, then topmost); CLEAN = original tones; no ink-to-ink traps (agreed); halo/round/smooth/
+  bevel/follow-visible/pullback not used. Panel: Progressive Knockout does not cut with the key; "Cut Top
+  Key From Colors" is blocked while it's on. Panel import unchanged (soft transparency selection + fill keeps
+  the tone) - TO CONFIRM on Sara's PC.
+- Tests: DMB Tour job through the engine = the approved poster exactly (0 of 5,460,779 trap px differ, CLEAN
+  tones identical). Box off: DMB Nash job old vs new engine IDENTICAL (22 files, --compare-jobs). cargo test 7/7.
+- Sara: run BUILD_AND_TEST_ENGINE.bat, then Reload the panel. Backups: versions\engine_main_backup_2026-10-26_
+  before_tonal_inks.rs, versions\main_backup_2026-10-26_before_tonal_inks.js.
+
+## 0-prev2. Update 2026-10-21
 
 **Panel fix 2026-10-21 (Manual Progressive Knockout):** Sara's run failed with "Destination clear failed
 ... result=-128" on grey green -> coat yello: grey green had been fully cut by the layers above it, so its
