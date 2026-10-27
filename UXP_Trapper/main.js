@@ -110,7 +110,9 @@ function presetsFromSharedJson(obj) {
     if (!id || types.some((x) => x.id === id)) return;
     const builtin = BUILTIN_FILE_TYPES.find((b) => b.id === id);
     const values = Object.assign({}, FILE_TYPE_BASE, always, cleanPresetSettings(t.settings || t.values || {}, notes, String(t.label || id)));
-    types.push({ id, label: String(t.label || (builtin && builtin.label) || id), help: String(t.help || t.description || (builtin && builtin.help) || ""), values });
+    let help = String(t.help || t.description || (builtin && builtin.help) || "");
+    if (t.example) help += (help ? " " : "") + "Example: " + String(t.example) + ".";
+    types.push({ id, label: String(t.label || (builtin && builtin.label) || id), help, values });
   });
   const std = types.find((t) => t.id === "standard");
   if (!std) throw new Error('presets.json has no Standard / Illustrated type');
@@ -118,7 +120,8 @@ function presetsFromSharedJson(obj) {
     const b = BUILTIN_FILE_TYPES.find((x) => x.id === "overlay");
     types.splice(types.indexOf(std) + 1, 0, { id: "overlay", label: b.label, help: b.help, values: Object.assign({}, std.values, { overlayLayers: true }) });
   }
-  return { types, notes, updated: String(obj.updated || obj.date || ""), updatedBy: String(obj.updatedBy || obj.by || "") };
+  return { types, notes, updated: String(obj.updated || obj.version || obj.date || ""),
+           updatedBy: String(obj.updatedBy || obj.by || (obj.agreed_with ? String(obj.agreed_with).split(",")[0] : "")) };
 }
 
 const FILE_TYPE_SETTING_NAMES = {

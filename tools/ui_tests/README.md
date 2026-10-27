@@ -19,3 +19,6 @@ How to run (cloud workspace):
    `mkdir job_broken && echo '{bad' > job_broken/job.json`.
 4. `node run_trapper_button_test.js <main.js> <styles.css> <outdir>` (paths of the test jobs are set
    at the top: TEMPLATES / JOBS). Screenshots + results.json go to <outdir>.
+
+`file_type_test.js` (picker, 28 checks) and `shared_folder_test.js` (shared Dropbox folder, 18 checks) run after
+run_trapper_button_test.js: `node shared_folder_test.js <outdir> fixtures/presets_test.json ../../shared_folder/presets.json`.

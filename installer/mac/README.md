@@ -27,9 +27,9 @@ Still to do: Mac test on the co-worker's computer (link this chat from the Claud
 ## Shared Dropbox folder (added 2026-10-26 15:30)
 - Panel: Setup > "Shared folder..." (both copies) - picked once, remembered with a UXP persistent token
   (`createPersistentToken` / `getEntryForPersistentToken`), saved as `sharedFolderToken` + `sharedFolderPath`.
-- Reads only `presets.json` there (format: docs/shared_folder/FORMAT.md, example presets.example.json).
+- Reads only `presets.json` there (format = the real file, rules in shared_folder/README.md; tested against it).
   Missing / offline / broken -> built-in presets + note under Setup + "Presets: ..." line in the status;
   Run Trapper never fails because of it. Saved settings never changed by it.
 - Installer looks for a "SmartTrapper Shared" folder under ~/Library/CloudStorage/*Dropbox* or ~/*Dropbox*
   and tells the co-worker which folder to pick. The installer and panel never WRITE to the shared folder.
-- Tests: tools/ui_tests/shared_folder_test.js (15 checks).
+- Tests: tools/ui_tests/shared_folder_test.js (18 checks, incl. the real shared presets.json).

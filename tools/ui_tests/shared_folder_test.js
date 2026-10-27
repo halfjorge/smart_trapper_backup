@@ -87,6 +87,19 @@ function folder(presetsText) { fs.rmSync(SH, { recursive: true, force: true }); 
   const hand = Object.assign({}, ex.always, ex.types[1].settings, { fileType: 'custom' });
   p = await open(hand); const jb = await p.evaluate((d) => window.__ctl.buildCurrentJobSpec(d).job, doc); await p.close();
   check('job.json identical: shared Geometric vs the same boxes by hand', JSON.stringify(ja) === JSON.stringify(jb));
+  // 7 the REAL shared presets.json (shared_folder/presets.json in git = the Dropbox copy)
+  const REAL = process.argv[4];
+  if (REAL) {
+    folder(fs.readFileSync(REAL, 'utf8'));
+    p = await open({ sharedFolderToken: 'tok:' + SH, sharedFolderPath: SH, fileType: 'overlay', bridgeUrl: 'http://127.0.0.1:8765',
+      preflightCleanup: true, roundTraps: true, closeKeyHalo: false, overlayLayers: true, smoothKeyTraps: true, bevelKeyCorners: true,
+      keyTrapsFollowVisible: true, tonalInks: false, alphaThreshold: 90, edgeBiasPx: 1, keyTrapPullbackPx: 1, colorTrapPullbackPx: 0, trapPx: 5 });
+    s = await st(p);
+    check('real presets.json: read, nothing ignored', /from the shared folder, updated 2026-10-26 by Sara\.$/.test(s.note), s.note);
+    check('real presets.json: Sara\'s MMJ settings show as Overlay, not adjusted', s.sel === 'overlay' && !/ADJUSTED/.test(await p.evaluate(() => document.getElementById('fileTypeNote').textContent)));
+    check('real presets.json: labels from the file', s.opts.includes('standard=Standard poster (illustrated / organic)'), JSON.stringify(s.opts));
+    await p.close();
+  }
   await browser.close();
   console.log('\n' + pass + ' passed, ' + fail + ' failed'); process.exit(fail ? 1 : 0);
 })().catch((e) => { console.error(e); process.exit(1); });
