@@ -22,8 +22,8 @@ Edit only your own line here; fetch/pull first and re-check before every push or
 - **UI / installer session** (session_01QbWcmNBwrQZqtLawTtBqCs): panel code (`UXP_Trapper/main.js`), the
   Mac installer, the standalone helper (`SmartTrapperB1/helper`), user guide (paused). 2026-10-27 07:56:
   Sara OK'd the Setup section for her PC -> `mac_installer` merged into `trapper_2026_10` and installed
-  (backup versions\main_backup_2026-10-27_before_setup_section.js). Next: Sara tests the folder picker in
-  Photoshop, then the installer test on the co-worker's Mac (open this chat in the Claude app there).
+  (backup versions\main_backup_2026-10-27_before_setup_section.js). 08:02 Sara: folder picker works in
+  Photoshop, presets read from the shared folder (restart check pending). Next: the installer test on the co-worker's Mac (open this chat in the Claude app there).
   (`.github/workflows/mac_package.yml` is in git only - the PC protects .github folders from remote writes; not needed on the PC.) Does NOT write to the
   Dropbox folder "SmartTrapper Shared"; the panel/installer only READ `presets.json` there.
 - **Shared-folder / settings session** (session_01MD548tCq1R9E4kh1AaC8Mr): fills "SmartTrapper Shared"

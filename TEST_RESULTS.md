@@ -36,7 +36,9 @@ all traps.
   -> kept, nothing made.
 - file_type_test 28/28; Run Trapper suite (18 situations + individual buttons) unchanged.
 - Mac package built and tested on a GitHub Mac (install, helper, real trap job, uninstall): 3 runs, all pass.
-Not tested here: the real Photoshop folder picker / remembered permission (Sara: Reload, pick, restart).
+CONFIRMED in Photoshop by Sara 2026-10-27 08:02: picked the Dropbox folder; panel shows the path and
+"Presets: from the shared folder, updated 2026-10-26 by Sara." Still to see: the folder remembered after a
+Photoshop restart.
 
 ## 2026-10-26 - Agreed preset values in the picker (panel only)
 file_type_test.js updated to the agreed values: 28 checks PASS on Sara's copy and the co-worker's copy
