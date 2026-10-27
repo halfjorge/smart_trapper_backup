@@ -26,6 +26,18 @@ all traps.
   included.
 - **Hand:** Sara's hand-trapped after file, measured the same way.
 
+## 2026-10-27 - Setup section: shared folder + folders on another computer (panel only, stand-in Photoshop)
+- `tools/ui_tests/shared_folder_test.js`: 18/18 PASS - not set, picked + remembered after restart, team
+  labels, saved settings never changed, presets.json missing / broken / bad values / Dropbox offline ->
+  built-in presets with a note, Run Trapper still FINISHES offline, job.json identical to ticking the boxes,
+  and the REAL shared presets.json (read cleanly, nothing ignored, values identical to the built-in presets,
+  Sara's MMJ settings open as Overlay, not adjusted).
+- Folders: "another computer" -> ~/SmartTrapper/TrapJobs + status_logs made; "Sara's PC" (folder exists)
+  -> kept, nothing made.
+- file_type_test 28/28; Run Trapper suite (18 situations + individual buttons) unchanged.
+- Mac package built and tested on a GitHub Mac (install, helper, real trap job, uninstall): 3 runs, all pass.
+Not tested here: the real Photoshop folder picker / remembered permission (Sara: Reload, pick, restart).
+
 ## 2026-10-26 - Agreed preset values in the picker (panel only)
 file_type_test.js updated to the agreed values: 28 checks PASS on Sara's copy and the co-worker's copy
 (new check: Sara's MMJ run-2 settings open as "Overlay / Multiply layers", values unchanged). job.json

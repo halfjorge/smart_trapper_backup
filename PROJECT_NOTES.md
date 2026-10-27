@@ -20,8 +20,10 @@ out of date.
 Sara asked that the two sessions don't conflict. They can't message each other, so this block is the channel.
 Edit only your own line here; fetch/pull first and re-check before every push or write to the PC.
 - **UI / installer session** (session_01QbWcmNBwrQZqtLawTtBqCs): panel code (`UXP_Trapper/main.js`), the
-  Mac installer, the standalone helper (`SmartTrapperB1/helper`), user guide (paused). Works on git branch
-  **`mac_installer`** (NOT on Sara's PC yet - waiting for her OK and a test on the Mac). Does NOT write to the
+  Mac installer, the standalone helper (`SmartTrapperB1/helper`), user guide (paused). 2026-10-27 07:56:
+  Sara OK'd the Setup section for her PC -> `mac_installer` merged into `trapper_2026_10` and installed
+  (backup versions\main_backup_2026-10-27_before_setup_section.js). Next: Sara tests the folder picker in
+  Photoshop, then the installer test on the co-worker's Mac (open this chat in the Claude app there). Does NOT write to the
   Dropbox folder "SmartTrapper Shared"; the panel/installer only READ `presets.json` there.
 - **Shared-folder / settings session** (session_01MD548tCq1R9E4kh1AaC8Mr): fills "SmartTrapper Shared"
   (`presets.json`, `approved_runs/`, `recipes/`) with the past approved settings - DONE 2026-10-26 15:28
