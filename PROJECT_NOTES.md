@@ -1,6 +1,6 @@
 # PROJECT NOTES - Smart Trapper (start here in a new chat)
 
-Last updated: 2026-10-26 14:45 (UI / workflow: one-button Run Trapper, file-type picker, two versions) by Claude. Owner: Sara (The Half and Half, screen-print shop).
+Last updated: 2026-10-26 15:30 (two sessions working - see the block at the top of section 0) by Claude (UI session). Owner: Sara (The Half and Half, screen-print shop).
 
 **New chat? Read section 0 (Next session) first, then the rest of this file, then `TRAP_RULES_NOTES.md` (the agreed trapping rules) and
 `CHANGES_2026-10-06.md` (what was changed and why).** Sections 9-11 below cover git, how to make a
@@ -15,6 +15,26 @@ out of date.
 ---
 
 ## 0. NEXT SESSION STARTS HERE (handoff 2026-10-26: UI / workflow, so someone else can use it)
+
+### >>> TWO CLAUDE SESSIONS ARE WORKING ON THIS - READ BEFORE CHANGING ANYTHING (2026-10-26 15:30) <<<
+Sara asked that the two sessions don't conflict. They can't message each other, so this block is the channel.
+Edit only your own line here; fetch/pull first and re-check before every push or write to the PC.
+- **UI / installer session** (session_01QbWcmNBwrQZqtLawTtBqCs): panel code (`UXP_Trapper/main.js`), the
+  Mac installer, the standalone helper (`SmartTrapperB1/helper`), user guide (paused). Works on git branch
+  **`mac_installer`** (NOT on Sara's PC yet - waiting for her OK and a test on the Mac). Does NOT write to the
+  Dropbox folder "SmartTrapper Shared"; the panel/installer only READ `presets.json` there.
+- **Shared-folder / settings session** (session_01MD548tCq1R9E4kh1AaC8Mr): fills "SmartTrapper Shared"
+  (`presets.json`, `approved_runs/`, `recipes/`) with the past approved settings. Please: no panel-code
+  changes, and write `presets.json` in the format the panel reads -> **`docs/shared_folder/FORMAT.md`** and
+  **`docs/shared_folder/presets.example.json`** (on `trapper_2026_10` and `mac_installer`; the agreed values, ready to copy).
+  The reader is tolerant (list or object of types, "illustrated" = standard, job.json names accepted), but
+  that format is the safe one. `approved_runs/`: one file per entry, name
+  `YYYY-MM-DD_HHMMSS_<who>_<psd name>.json`, fields in FORMAT.md.
+- **Both:** `trapper_2026_10` = exactly what is on Sara's PC. Only change it when Sara has OK'd something for
+  her PC; `git fetch` + rebase first; add your notes under your own heading; never overwrite the PC copy of a
+  file without checking it hasn't changed since you read it.
+- Sara's Dropbox path (her PC): `C:\Users\Valued Customer\The Half and Half Dropbox\Ben Gunter\Shared\SmartTrapper Shared`
+  (empty at 15:25). TrapJobs / masks / PSDs never go there.
 
 **Sara's goal now:** make the panel easy for ANOTHER person to use efficiently, without Sara's knowledge
 of building and testing it. The backend (engine + trap rules) is in a good place; the work is UI and workflow.

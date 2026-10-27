@@ -1,0 +1,89 @@
+{
+  "_about": "Single source of truth for the trapper's settings per kind of file. Only Sara changes this file. Setting names match the panel (UXP_Trapper/main.js FILE_TYPES). Trap width is 5 px at 300 ppi; use 10 px at 600 ppi.",
+  "version": "2026-10-26",
+  "agreed_with": "Sara, 2026-10-26 (from MMJ_OBH27 run 2; Geometric bevel ON confirmed 15:10)",
+  "types": {
+    "standard": {
+      "label": "Standard poster (illustrated / organic)",
+      "example": "MMJ_OBH27 run 2",
+      "values": {
+        "preflightCleanup": true,
+        "roundTraps": true,
+        "closeKeyHalo": false,
+        "overlayLayers": false,
+        "smoothKeyTraps": true,
+        "bevelKeyCorners": true,
+        "keyTrapsFollowVisible": true,
+        "tonalInks": false,
+        "alphaThreshold": 90,
+        "edgeBiasPx": 1,
+        "keyTrapPullbackPx": 1,
+        "colorTrapPullbackPx": 0,
+        "trapPx": 5
+      }
+    },
+    "geometric": {
+      "label": "Geometric / flat shapes",
+      "example": "Obey (GM-SHEP)",
+      "values": {
+        "preflightCleanup": true,
+        "roundTraps": false,
+        "closeKeyHalo": false,
+        "overlayLayers": false,
+        "smoothKeyTraps": true,
+        "bevelKeyCorners": true,
+        "keyTrapsFollowVisible": false,
+        "tonalInks": false,
+        "alphaThreshold": 90,
+        "edgeBiasPx": 1,
+        "keyTrapPullbackPx": 1,
+        "colorTrapPullbackPx": 0,
+        "trapPx": 5
+      },
+      "after_the_app": "Joint mitres at the key and bleed were done offline by Claude - see recipes/Obey_GM-SHEP_2026-10.md"
+    },
+    "overlay": {
+      "label": "Overlay / Multiply layers",
+      "example": "MMJ_OBH27 (cyan 3115 U on Darken)",
+      "values": {
+        "preflightCleanup": true,
+        "roundTraps": true,
+        "closeKeyHalo": false,
+        "overlayLayers": true,
+        "smoothKeyTraps": true,
+        "bevelKeyCorners": true,
+        "keyTrapsFollowVisible": true,
+        "tonalInks": false,
+        "alphaThreshold": 90,
+        "edgeBiasPx": 1,
+        "keyTrapPullbackPx": 1,
+        "colorTrapPullbackPx": 0,
+        "trapPx": 5
+      },
+      "note": "Use when any layer is not Normal blend or is under 100% opacity."
+    },
+    "tonal": {
+      "label": "Tonal / grayscale",
+      "example": "DMB Fall Tour 2026",
+      "values": {
+        "preflightCleanup": true,
+        "roundTraps": true,
+        "closeKeyHalo": false,
+        "overlayLayers": false,
+        "smoothKeyTraps": true,
+        "bevelKeyCorners": true,
+        "keyTrapsFollowVisible": true,
+        "tonalInks": true,
+        "alphaThreshold": 90,
+        "edgeBiasPx": 1,
+        "keyTrapPullbackPx": 1,
+        "colorTrapPullbackPx": 0,
+        "trapPx": 5
+      },
+      "note": "Round / smooth / bevel / overlay are ignored in tonal mode. Do NOT run Cut Top Key."
+    }
+  },
+  "special_cases": {
+    "closeKeyHalo": "Only for files with white outlines round the key (Phish-type). Otherwise OFF."
+  }
+}

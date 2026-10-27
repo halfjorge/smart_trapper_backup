@@ -1,0 +1,33 @@
+{
+  "date": "2026-10-13",
+  "file": "PETESCHAW_before_v1.pdf",
+  "job_type": "Illustrated / organic",
+  "made_with": "panel",
+  "job_folder": "TrapJobs\\PETESCHAW_before_v1.pdf__UXP__2026-10-13T14-12-32-197Z",
+  "settings": {
+    "ppi": 300,
+    "trap_px_note": "trap width = panel 'Trap' field (not stored in job.json; 5 @300 unless noted)",
+    "preflightCleanup": true,
+    "roundTraps": true,
+    "keyTrapsFollowVisible": true,
+    "smoothKeyTraps": true,
+    "bevelKeyCorners": true,
+    "overlayLayers": false,
+    "closeKeyHalo": false,
+    "tonalInks": false,
+    "alphaThreshold": 90,
+    "edgeBiasPx": 0,
+    "keyTrapPullbackPx": 1,
+    "colorTrapPullbackPx": 0,
+    "inks": [
+      "MARIGOLD 6007 C",
+      "OLIIVE 7771 C",
+      "BLUE 7688 C"
+    ],
+    "key": "DARK NAVY KEYLINE 296 C",
+    "trap_px": 5
+  },
+  "verdict": "REFERENCE - matches the offline version Sara checked (Peteschaw_pullback2_fixed.psd); final verdict not recorded",
+  "note": "The job \"Key traps follow the colour you see\" was built for.",
+  "recorded_by": "Claude (backfilled 2026-10-26 from TrapJobs + project notes)"
+}

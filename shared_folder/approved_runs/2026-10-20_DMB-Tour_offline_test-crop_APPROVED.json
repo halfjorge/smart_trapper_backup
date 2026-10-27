@@ -1,0 +1,13 @@
+{
+  "date": "2026-10-20",
+  "file": "DMB Fall Tour 2026 -> Trap Examples\\DMB Tour\\DMB_Tour_test_crop_5x5in_trapped.zip",
+  "job_type": "Grayscale / textured layers",
+  "made_with": "Claude offline (tools/dmb_tour/tone_trap.py)",
+  "settings": {
+    "trap_px": 5,
+    "ppi": 300
+  },
+  "verdict": "APPROVED (\"that looks really good\")",
+  "recipe": "recipes/DMB_Fall_Tour_2026.md",
+  "recorded_by": "Claude (backfilled 2026-10-26 from TrapJobs + project notes)"
+}

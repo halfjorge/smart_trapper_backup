@@ -1,0 +1,36 @@
+{
+  "date": "2026-10-19",
+  "file": "Obey poster (Sepped_GM-SHEP-Print-ColorSeperated.psd)",
+  "job_type": "Geometric / hard-edged",
+  "made_with": "panel",
+  "job_folder": "TrapJobs\\Sepped_GM-SHEP-Print-ColorSeperated.psd__UXP__2026-10-19T12-10-29-239Z",
+  "settings": {
+    "ppi": 600,
+    "trap_px_note": "trap width = panel 'Trap' field (not stored in job.json; 5 @300 unless noted)",
+    "preflightCleanup": true,
+    "roundTraps": true,
+    "keyTrapsFollowVisible": true,
+    "smoothKeyTraps": true,
+    "bevelKeyCorners": true,
+    "overlayLayers": true,
+    "closeKeyHalo": false,
+    "tonalInks": false,
+    "alphaThreshold": 90,
+    "edgeBiasPx": 0,
+    "keyTrapPullbackPx": 1,
+    "colorTrapPullbackPx": 0,
+    "inks": [
+      "Yellow",
+      "Cream",
+      "Red",
+      "Light Blue",
+      "Blue",
+      "Dark blue"
+    ],
+    "key": "Key",
+    "trap_px": 10
+  },
+  "verdict": "REJECTED (worse)",
+  "note": "Round traps left rounded caps poking past corners and shaved corners; follow-visible scattered dots at diagonal joints. Do not use Round / follow-visible on geometric art.",
+  "recorded_by": "Claude (backfilled 2026-10-26 from TrapJobs + project notes)"
+}

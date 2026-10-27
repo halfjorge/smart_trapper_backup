@@ -1,0 +1,10 @@
+{
+  "date": "2026-10-19",
+  "file": "Obey (Obey_roundtraps_off.pdf -> Obey_roundtraps_off_MITRED_600.zip)",
+  "job_type": "Geometric / hard-edged",
+  "made_with": "Claude offline (tools/obey/mitre.py v1)",
+  "verdict": "REJECTED",
+  "note": "Yellow 'finger' at a shallow joint and light blue band stopping dead at the key edge -> fixed in v2 (blue-line rule, 25 deg cutoff).",
+  "recipe": "recipes/Obey_GM-SHEP_2026-10.md",
+  "recorded_by": "Claude (backfilled 2026-10-26 from TrapJobs + project notes)"
+}
