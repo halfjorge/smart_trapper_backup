@@ -24,17 +24,36 @@ Edit only your own line here; fetch/pull first and re-check before every push or
   **`mac_installer`** (NOT on Sara's PC yet - waiting for her OK and a test on the Mac). Does NOT write to the
   Dropbox folder "SmartTrapper Shared"; the panel/installer only READ `presets.json` there.
 - **Shared-folder / settings session** (session_01MD548tCq1R9E4kh1AaC8Mr): fills "SmartTrapper Shared"
-  (`presets.json`, `approved_runs/`, `recipes/`) with the past approved settings. Please: no panel-code
-  changes, and write `presets.json` in the format the panel reads -> **`docs/shared_folder/FORMAT.md`** and
-  **`docs/shared_folder/presets.example.json`** (on `trapper_2026_10` and `mac_installer`; the agreed values, ready to copy).
-  The reader is tolerant (list or object of types, "illustrated" = standard, job.json names accepted), but
-  that format is the safe one. `approved_runs/`: one file per entry, name
-  `YYYY-MM-DD_HHMMSS_<who>_<psd name>.json`, fields in FORMAT.md.
+  (`presets.json`, `approved_runs/`, `recipes/`) with the past approved settings - DONE 2026-10-26 15:28
+  (git copy: `shared_folder/`). Its README + files ARE the format (Sara 2026-10-27: follow the README's
+  rules - add new files only; every delivery gets a recipe card and an approved_runs entry). The panel was
+  adapted to read that presets.json (2026-10-27, tested on the real file); the earlier draft format in
+  docs/shared_folder was retired. Please: no panel-code changes.
 - **Both:** `trapper_2026_10` = exactly what is on Sara's PC. Only change it when Sara has OK'd something for
   her PC; `git fetch` + rebase first; add your notes under your own heading; never overwrite the PC copy of a
   file without checking it hasn't changed since you read it.
 - Sara's Dropbox path (her PC): `C:\Users\Valued Customer\The Half and Half Dropbox\Ben Gunter\Shared\SmartTrapper Shared`
-  (empty at 15:25). TrapJobs / masks / PSDs never go there.
+  (empty at 15:25 on 10-26, filled by the shared-folder session at 15:28). TrapJobs / masks / PSDs never go there.
+
+**SHARED FOLDER RULES (Sara 2026-10-27, from shared_folder/README.md) - apply to every Claude chat:**
+- `presets.json` = single source of truth; only Sara changes it. The panel only reads it.
+- Add new files only; never rewrite another chat's files.
+- No delivery without a recipe card and an approved_runs entry: every poster file Claude makes outside the
+  app gets a card in `recipes/` (copy in that job's Trap Examples folder); every file Claude delivers gets an
+  `approved_runs/` entry with verdict "DELIVERED" until Sara judges it. (Panel / installer software changes
+  are not poster deliveries - they are logged in CHANGES / TEST_RESULTS as before.)
+
+**Approve button + "use last approved settings" plan (build AFTER the installer, per Sara):**
+- Approve button (Run Trapper's finish message / Status area): Approve / Reject + one-line note. Writes ONE
+  NEW file `approved_runs/YYYY-MM-DD_<poster>_panel_<HHMMSS>_<APPROVED|REJECTED>.json` in the existing
+  entries' format: date, file, job_type (type label), made_with "panel", job_folder, settings {ppi, trap_px,
+  the 13 panel settings, inks[], key}, verdict, note, recorded_by "<name> (panel, <computer>)", plus
+  fileType id and preset source. Never overwrites (adds -2, -3 ... if the name exists). Asks each person's
+  name once (Setup). Folder not set / offline -> says so and offers to save the entry into the job folder.
+- "Use last approved settings?": when Run Trapper starts (and when a document opens), look in approved_runs
+  for the newest entry whose `file` matches this document (ignoring case, ".psd", " (1)") with a verdict
+  starting APPROVED -> "This poster was approved on <date> with <type> (<note>). Use those settings?"
+  [Use them] [Keep mine]. Read-only; nothing found / offline -> no prompt, one status line.
 
 **Sara's goal now:** make the panel easy for ANOTHER person to use efficiently, without Sara's knowledge
 of building and testing it. The backend (engine + trap rules) is in a good place; the work is UI and workflow.
