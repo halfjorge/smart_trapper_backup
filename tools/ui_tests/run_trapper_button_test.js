@@ -66,6 +66,7 @@ const OK = { knockout: { ok: true, operations: 3 }, snapshot: undefined, prepare
 const scenarios = [
   { name: 'A normal file, everything works', doc: poster(), job: 'ok' },
   { name: 'B Tonal inks ticked -> knockout skipped', doc: poster(), job: 'ok', ticks: ['tonalInks'] },
+  { name: 'B2 Key doesn\'t cut ticked -> knockout runs (key not cutting)', doc: poster(), job: 'ok', ticks: ['keyNoCut'] },
   { name: 'C no document open', doc: null, job: 'ok' },
   { name: 'D file already trapped (COLOR__ groups)', doc: poster({ layers: [layer(1, 'key'), layer(2, 'COLOR__blue', { kind: 'group' }), layer(3, 'COLOR__red', { kind: 'group' }), layer(4, 'paper')] }), job: 'ok' },
   { name: 'E helper not running', doc: poster(), job: 'ok', bridge: 'http://127.0.0.1:8799' },

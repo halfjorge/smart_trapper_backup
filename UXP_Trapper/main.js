@@ -29,6 +29,7 @@ const DEFAULTS = {
   bevelKeyCorners: false,
   keyTrapsFollowVisible: false,
   tonalInks: false,
+  keyNoCut: false,
   trapPx: 5,
   bridgeUrl: "http://127.0.0.1:8765",
   jobFolder: DEFAULT_JOB_FOLDER,
@@ -41,7 +42,7 @@ const DEFAULTS = {
 // they match, or Custom. The type itself is NOT sent to the engine (job.json lists each setting).
 const FILE_TYPE_BASE = {
   fullDebug: false, preflightCleanup: true, roundTraps: true, closeKeyHalo: false, overlayLayers: false,
-  smoothKeyTraps: true, bevelKeyCorners: true, keyTrapsFollowVisible: true, tonalInks: false,
+  smoothKeyTraps: true, bevelKeyCorners: true, keyTrapsFollowVisible: true, tonalInks: false, keyNoCut: false,
   alphaThreshold: 90, edgeBiasPx: 1, keyTrapPullbackPx: 1, colorTrapPullbackPx: 0, trapPx: 5
 };
 // Values agreed with Sara 2026-10-26 (PROJECT_NOTES "DEFAULT SETTINGS / PRESETS", from her MMJ_OBH27 run 2).
@@ -55,6 +56,9 @@ const BUILTIN_FILE_TYPES = [
   { id: "overlay", label: "Overlay / Multiply layers",
     help: "Standard poster settings plus overlay layers: for files with Multiply / Darken layers or layers under 100% opacity. Colours under them are kept.",
     values: Object.assign({}, FILE_TYPE_BASE, { overlayLayers: true }) },
+  { id: "graykey", label: "Gray / textured key",
+    help: "Solid colours, but the KEY has grays / texture (black at part opacity, e.g. Metallica Vegas 2026). Standard poster settings; the key does not cut the colours, so they stay under its grays.",
+    values: Object.assign({}, FILE_TYPE_BASE, { keyNoCut: true }) },
   { id: "tonal", label: "Tonal / grayscale",
     help: "Every colour is a grayscale / textured layer (e.g. DMB Fall Tour). No knockout; traps only under solid key lines.",
     values: Object.assign({}, FILE_TYPE_BASE, { tonalInks: true }) }
@@ -70,6 +74,8 @@ function presetTypeId(raw) {
   if (!t) return "";
   if (/illustrat|organic|standard|poster|default/.test(t)) return "standard";
   if (/geometr|hard|flat/.test(t)) return "geometric";
+  if (/key/.test(t) && /gr[ae]y|textur|stipple|tone/.test(t)) return "graykey";
+  if (/^graykey$|^gray_?key$/.test(t)) return "graykey";
   if (/tonal|gr[ae]y|textur/.test(t)) return "tonal";
   if (/overlay|multiply|transparen/.test(t)) return "overlay";
   return t.replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "");
@@ -120,6 +126,12 @@ function presetsFromSharedJson(obj) {
     const b = BUILTIN_FILE_TYPES.find((x) => x.id === "overlay");
     types.splice(types.indexOf(std) + 1, 0, { id: "overlay", label: b.label, help: b.help, values: Object.assign({}, std.values, { overlayLayers: true }) });
   }
+  if (!types.some((t) => t.id === "graykey")) {   // gray / textured key = Standard + key doesn't cut (until presets.json has it)
+    const b = BUILTIN_FILE_TYPES.find((x) => x.id === "graykey");
+    const at = types.findIndex((t) => t.id === "tonal");
+    const entry = { id: "graykey", label: b.label, help: b.help, values: Object.assign({}, std.values, { keyNoCut: true }) };
+    if (at >= 0) types.splice(at, 0, entry); else types.push(entry);
+  }
   return { types, notes, updated: String(obj.updated || obj.version || obj.date || ""),
            updatedBy: String(obj.updatedBy || obj.by || (obj.agreed_with ? String(obj.agreed_with).split(",")[0] : "")) };
 }
@@ -128,7 +140,7 @@ const FILE_TYPE_SETTING_NAMES = {
   fullDebug: "Full debug logging", preflightCleanup: "Preflight cleanup", roundTraps: "Round traps",
   closeKeyHalo: "Close key halo", overlayLayers: "Overlay layers", smoothKeyTraps: "Smooth traps under the key",
   bevelKeyCorners: "Bevel trap corners", keyTrapsFollowVisible: "Key traps follow the colour you see",
-  tonalInks: "Tonal inks", alphaThreshold: "Alpha threshold", edgeBiasPx: "Edge bias",
+  tonalInks: "Tonal inks", keyNoCut: "Key doesn't cut the colours", alphaThreshold: "Alpha threshold", edgeBiasPx: "Edge bias",
   keyTrapPullbackPx: "Key trap pullback", colorTrapPullbackPx: "Colour trap pullback", trapPx: "Trap width"
 };
 function fileTypeById(id) { return FILE_TYPES.find((t) => t.id === id) || null; }
@@ -227,6 +239,13 @@ function panelMarkup() {
             <span class="check-text" data-for="tonalInks" style="color:#f2f2f2; opacity:1;">Tonal inks (grayscale layers)</span>
           </div>
           <div class="field-help">For files where every colour is a grayscale / textured layer (tones in the layer, soft edges, a stipple key), e.g. DMB Fall Tour 2026. Inks keep their tones. Traps go only under solid key line work (never under the stipple, paper specks or highlights), 5 px, split down the middle of a line between two inks, and each trap carries that ink's own tone and grain from its edge. No ink-to-ink traps; round / smooth / bevel / follow-visible / halo are not used. The key does not cut the inks (Progressive Knockout skips the key; Cut Top Key is blocked). Leave off for normal solid-colour files.</div>
+        </div>
+        <div class="setting-box" title="For files with SOLID colours whose KEY has grays or texture (black at part opacity), e.g. Metallica Vegas 2026. The knockout still runs so the colours cut each other, but the key does not cut them, so the colours stay under the key's grays and print through them. Cut Top Key is blocked. Traps are made exactly as for Standard. Leave off for normal files.">
+          <div class="check-row">
+            <input id="keyNoCut" type="checkbox">
+            <span class="check-text" data-for="keyNoCut" style="color:#f2f2f2; opacity:1;">Key doesn't cut the colours (key has grays / texture)</span>
+          </div>
+          <div class="field-help">For files with SOLID colours whose KEY has grays or texture (black at part opacity), e.g. Metallica Vegas 2026. The knockout still runs so the colours cut each other, but the key does not cut them, so the colours stay under the key's grays and print through them. Cut Top Key is blocked. Traps are made exactly as for Standard. Leave off for normal files.</div>
         </div>
         <div class="field" title="How solid a pixel must be to count as ink (0-255). Soft edge pixels below this are treated as paper. 90 = about 35% opacity. Only used when Preflight cleanup is on.">
           <div class="field-label">Alpha threshold</div>
@@ -350,6 +369,7 @@ function createController(rootNode) {
       "bevelKeyCorners",
       "keyTrapsFollowVisible",
       "tonalInks",
+      "keyNoCut",
       "alphaThreshold",
       "edgeBiasPx",
       "keyTrapPullbackPx",
@@ -483,6 +503,7 @@ function createController(rootNode) {
       bevelKeyCorners: !!els.bevelKeyCorners.checked,
       keyTrapsFollowVisible: !!els.keyTrapsFollowVisible.checked,
       tonalInks: !!els.tonalInks.checked,
+      keyNoCut: !!(els.keyNoCut && els.keyNoCut.checked),
       alphaThreshold: numberOr(els.alphaThreshold.value, DEFAULTS.alphaThreshold),
       edgeBiasPx: numberOr(els.edgeBiasPx.value, DEFAULTS.edgeBiasPx),
       keyTrapPullbackPx: numberOr(els.keyTrapPullbackPx.value, DEFAULTS.keyTrapPullbackPx),
@@ -507,6 +528,7 @@ function createController(rootNode) {
     els.bevelKeyCorners.checked = !!s.bevelKeyCorners;
     els.keyTrapsFollowVisible.checked = !!s.keyTrapsFollowVisible;
     els.tonalInks.checked = !!s.tonalInks;
+    if (els.keyNoCut) els.keyNoCut.checked = !!s.keyNoCut;
     els.alphaThreshold.value = String(s.alphaThreshold);
     els.edgeBiasPx.value = String(s.edgeBiasPx);
     els.keyTrapPullbackPx.value = String(s.keyTrapPullbackPx);
@@ -1759,8 +1781,9 @@ function createController(rootNode) {
     appendStatus("  paper preserved: " + paper.meta.name);
     if (overlayMode) appendStatus("  overlay mode ON: overlay layers are not used to cut");
     // Tonal inks (2026-10-26): the key's stipple prints OVER the inks, so the key must not cut them.
-    const tonalMode = !!getSettings().tonalInks;
-    if (tonalMode) appendStatus("  tonal inks ON: the key is not used to cut (its texture prints over the inks)");
+    const tonalMode = !!getSettings().tonalInks || !!getSettings().keyNoCut;   // keyNoCut (2026-11-12): gray / textured key
+    if (getSettings().tonalInks) appendStatus("  tonal inks ON: the key is not used to cut (its texture prints over the inks)");
+    else if (tonalMode) appendStatus("  key doesn't cut the colours (gray / textured key): the key is not used to cut; colours still cut each other");
 
     try {
         for (let sourceIdx = 0; sourceIdx < knockable.length - 1; sourceIdx += 1) {
@@ -1775,7 +1798,7 @@ function createController(rootNode) {
             continue;
           }
           if (tonalMode && sourceIdx === 0) {
-            appendStatus("  not cutting with the key: " + source.meta.name + " (tonal inks)");
+            appendStatus("  not cutting with the key: " + source.meta.name + (getSettings().tonalInks ? " (tonal inks)" : " (key doesn't cut the colours)"));
             continue;
           }
           if (overlayMode && sourceIdx > 0 && isOverlayMeta(source.meta)) {
@@ -2293,6 +2316,9 @@ function createController(rootNode) {
       }
       if (getSettings().tonalInks) {
         throw new Error("Tonal inks is on: the key's texture prints over the inks, so cutting the key out of the colours would remove tone under the stipple. Turn Tonal inks off to use this button.");
+      }
+      if (getSettings().keyNoCut) {
+        throw new Error("\"Key doesn't cut the colours\" is on: the key's grays print over the colours, so cutting the key out of the colours would leave paper under the grays. Untick it to use this button.");
       }
       const startMs = nowMs();
       const result = await applyTopKeyKnockoutInPhotoshop(doc);
@@ -4015,6 +4041,7 @@ function createController(rootNode) {
         ", bevelKeyCorners=" + (!!settings.bevelKeyCorners) +
         ", keyTrapsFollowVisible=" + (!!settings.keyTrapsFollowVisible) +
         ", tonalInks=" + (!!settings.tonalInks) +
+        ", keyNoCut=" + (!!settings.keyNoCut) +
         ", alphaThreshold=" + settings.alphaThreshold +
         ", edgeBiasPx=" + settings.edgeBiasPx +
         ", keyTrapPullbackPx=" + settings.keyTrapPullbackPx +
@@ -4862,7 +4889,7 @@ function createController(rootNode) {
         warnings.length ? "RUN TRAPPER FINISHED - WITH WARNINGS" : "RUN TRAPPER FINISHED",
         "",
         "File type: " + fileTypeSummary(settings),
-        "Progressive Knockout: " + (settings.tonalInks ? "skipped (Tonal inks)" : "done"),
+        "Progressive Knockout: " + (settings.tonalInks ? "skipped (Tonal inks)" : (settings.keyNoCut ? "done - key not cutting (gray / textured key)" : "done")),
         "Traps imported: " + im.placed + " of " + im.total,
         "Time: " + secs + " s"
       ];
@@ -4918,7 +4945,7 @@ function createController(rootNode) {
     if (els.fileTypeResetBtn) {
       els.fileTypeResetBtn.addEventListener("click", () => applyFileType(els.fileType.value));
     }
-    ["fullDebug", "preflightCleanup", "roundTraps", "closeKeyHalo", "overlayLayers", "smoothKeyTraps", "bevelKeyCorners", "keyTrapsFollowVisible", "tonalInks", "alphaThreshold", "edgeBiasPx", "keyTrapPullbackPx", "colorTrapPullbackPx", "trapPx"].forEach((id) => {
+    ["fullDebug", "preflightCleanup", "roundTraps", "closeKeyHalo", "overlayLayers", "smoothKeyTraps", "bevelKeyCorners", "keyTrapsFollowVisible", "tonalInks", "keyNoCut", "alphaThreshold", "edgeBiasPx", "keyTrapPullbackPx", "colorTrapPullbackPx", "trapPx"].forEach((id) => {
       const el = els[id];
       if (!el) return;
       el.addEventListener("change", persistSettingsSilently);

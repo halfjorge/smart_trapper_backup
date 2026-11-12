@@ -37,7 +37,7 @@ function folder(presetsText) { fs.rmSync(SH, { recursive: true, force: true }); 
   // 1 not set
   let p = await open(null); let s = await st(p);
   check('not set: built-in presets, says so', /not set - using the built-in presets/.test(s.note) && /Presets: Shared folder not set/.test(s.status), s.note);
-  check('not set: picker has the 4 types + Custom', s.opts.length === 5);
+  check('not set: picker has the 5 types + Custom', s.opts.length === 6, JSON.stringify(s.opts));
   // 9 pick it with the button (folder with the example presets)
   folder(JSON.stringify(ex));
   await p.evaluate((f) => { window.__pickFolder = f; }, SH); await p.click('#pickSharedFolderBtn'); await p.waitForTimeout(300); s = await st(p);
@@ -62,7 +62,7 @@ function folder(presetsText) { fs.rmSync(SH, { recursive: true, force: true }); 
   s = await st(p); await p.close();
   // 3 presets.json missing
   folder(undefined); p = await open({ sharedFolderToken: 'tok:' + SH, sharedFolderPath: SH }); s = await st(p);
-  check('presets.json missing: built-in + says so', /not in the shared folder yet/.test(s.note) && s.opts.length === 5, s.note); await p.close();
+  check('presets.json missing: built-in + says so', /not in the shared folder yet/.test(s.note) && s.opts.length === 6, s.note); await p.close();
   // 4 broken JSON
   folder('{ "types": [ oops'); p = await open({ sharedFolderToken: 'tok:' + SH, sharedFolderPath: SH }); s = await st(p);
   check('broken presets.json: built-in + says so', /could not be used/.test(s.note), s.note); await p.close();
@@ -98,6 +98,7 @@ function folder(presetsText) { fs.rmSync(SH, { recursive: true, force: true }); 
     check('real presets.json: read, nothing ignored', /from the shared folder, updated 2026-10-26 by Sara\.$/.test(s.note), s.note);
     check('real presets.json: Sara\'s MMJ settings show as Overlay, not adjusted', s.sel === 'overlay' && !/ADJUSTED/.test(await p.evaluate(() => document.getElementById('fileTypeNote').textContent)));
     check('real presets.json: labels from the file', s.opts.includes('standard=Standard poster (illustrated / organic)'), JSON.stringify(s.opts));
+    check('real presets.json (no graykey entry yet): Gray / textured key added = Standard + key doesn\'t cut', s.opts.includes('graykey=Gray / textured key') && s.opts.indexOf('graykey=Gray / textured key') === s.opts.indexOf('tonal=Tonal / grayscale') - 1, JSON.stringify(s.opts));
     await p.close();
   }
   await browser.close();

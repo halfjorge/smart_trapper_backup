@@ -2,10 +2,11 @@
 const { chromium } = require('playwright');
 const OUT = process.argv[2] || '/home/claude/work/out';
 const TYPE_VALUES = {
-  standard: { fullDebug: false, preflightCleanup: true, roundTraps: true, closeKeyHalo: false, overlayLayers: false, smoothKeyTraps: true, bevelKeyCorners: true, keyTrapsFollowVisible: true, tonalInks: false, alphaThreshold: 90, edgeBiasPx: 1, keyTrapPullbackPx: 1, colorTrapPullbackPx: 0, trapPx: 5 },
+  standard: { fullDebug: false, preflightCleanup: true, roundTraps: true, closeKeyHalo: false, overlayLayers: false, smoothKeyTraps: true, bevelKeyCorners: true, keyTrapsFollowVisible: true, tonalInks: false, keyNoCut: false, alphaThreshold: 90, edgeBiasPx: 1, keyTrapPullbackPx: 1, colorTrapPullbackPx: 0, trapPx: 5 },
 };
 TYPE_VALUES.geometric = Object.assign({}, TYPE_VALUES.standard, { roundTraps: false, keyTrapsFollowVisible: false });
 TYPE_VALUES.overlay = Object.assign({}, TYPE_VALUES.standard, { overlayLayers: true });
+TYPE_VALUES.graykey = Object.assign({}, TYPE_VALUES.standard, { keyNoCut: true });
 TYPE_VALUES.tonal = Object.assign({}, TYPE_VALUES.standard, { tonalInks: true });
 const KEYS = Object.keys(TYPE_VALUES.standard);
 const doc = { id: 7, title: 'p.psd', mode: 'RGBColorMode', resolution: 300, width: 300, height: 300,
@@ -42,7 +43,7 @@ const eq = (a, b) => JSON.stringify(a) === JSON.stringify(b);
   await page.screenshot({ path: OUT + '/picker_fresh.png', clip: { x: 0, y: 0, width: 380, height: 260 } });
 
   // 2 each type fills the boxes and is remembered
-  for (const id of ['geometric', 'overlay', 'tonal', 'standard']) {
+  for (const id of ['geometric', 'overlay', 'graykey', 'tonal', 'standard']) {
     await choose(page, id); st = await state(page);
     check('pick ' + id + ': boxes = its values', eq(pick(st.settings), TYPE_VALUES[id]));
     check('pick ' + id + ': saved (survives Reload)', st.stored && st.stored.fileType === id && eq(pick(st.stored), TYPE_VALUES[id]));
@@ -71,6 +72,17 @@ const eq = (a, b) => JSON.stringify(a) === JSON.stringify(b);
   await page.evaluate(() => document.querySelector('.check-text[data-for="closeKeyHalo"]').click()); st = await state(page);
   check('clicking a setting name updates the note', /Close key halo on \(usual off\)/.test(st.note));
 
+  // 4b the new box: shows in the note when changed by hand
+  await choose(page, 'standard');
+  await page.evaluate(() => { const c = document.getElementById('keyNoCut'); c.checked = true; c.dispatchEvent(new Event('change')); });
+  st = await state(page);
+  check('ticking "Key doesn\'t cut" on Standard shows as ADJUSTED', /Key doesn't cut the colours on \(usual off\)/.test(st.note), JSON.stringify(st.note));
+  await choose(page, 'graykey'); st = await state(page);
+  check('Gray / textured key = Standard + key doesn\'t cut, note normal', eq(pick(st.settings), TYPE_VALUES.graykey) && !st.reset, JSON.stringify(st.note));
+  const cutMsg = await page.evaluate(async () => { const n = window.__alerts.length; document.getElementById('cutKeyBtn').click();
+    for (let i = 0; i < 100 && window.__alerts.length === n; i++) await new Promise((r) => setTimeout(r, 30));
+    return document.getElementById('status').textContent; });
+  check('Cut Top Key blocked while "Key doesn\'t cut" is on', /Key doesn't cut the colours\\?" is on/.test(cutMsg) || /is on: the key's grays print over the colours/.test(cutMsg), cutMsg.slice(-200));
   // 5 Custom changes nothing
   const before = pick(st.settings); await choose(page, 'custom'); st = await state(page);
   check('Custom: values unchanged', eq(pick(st.settings), before) && /Your own settings/.test(st.note));
@@ -95,12 +107,12 @@ const eq = (a, b) => JSON.stringify(a) === JSON.stringify(b);
   await page.close();
 
   // 7 the engine gets the same job settings whether a type is picked or the boxes are ticked by hand
-  for (const id of ['standard', 'geometric', 'overlay', 'tonal']) {
+  for (const id of ['standard', 'geometric', 'overlay', 'graykey', 'tonal']) {
     const a = await openPanel(null); await choose(a, id);
     const ja = await a.evaluate((doc) => { const j = window.__ctl.buildCurrentJobSpec(doc).job; return j; }, doc); await a.close();
     const b = await openPanel(Object.assign({ bridgeUrl: 'http://127.0.0.1:8765' }, TYPE_VALUES[id], { fileType: 'custom' }));
     const jb = await b.evaluate((doc) => window.__ctl.buildCurrentJobSpec(doc).job, doc); await b.close();
-    check('job.json identical: picker "' + id + '" vs boxes by hand', eq(ja, jb), JSON.stringify(Object.keys(ja)).includes('fileType') ? 'fileType leaked!' : '');
+    check('job.json identical: picker "' + id + '" vs boxes by hand', eq(ja, jb) && !('fileType' in ja) && !('keyNoCut' in ja), ('keyNoCut' in ja) ? 'keyNoCut leaked into job.json!' : '');
     if (id === 'geometric') console.log('   job.json settings (geometric): ' + JSON.stringify(Object.fromEntries(Object.entries(ja).filter(([k]) => !['colors', 'files', 'docName', 'widthPx', 'heightPx', 'resolution', 'keyLayerName', 'paperLayerName'].includes(k)))));
   }
   await browser.close();
